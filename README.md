@@ -20,11 +20,17 @@ LLMAdapterClient/
 ├── LLMAdapterClient.Common/           # Core interfaces and models
 │   └── Interfaces.cs                  # Contains IAdapterInfo and IAdapterPublisher
 ├── LLMAdapterClient.Publisher/        # Adapter publishing application
-│   └── Program.cs                     # Publisher entry point
+│   ├── Program.cs                     # Publisher entry point
+│   └── Services/                      # Publisher services
+│       ├── AdapterSelector.cs         # Discovers adapter directories
+│       ├── AdapterValidator.cs        # Validates adapter file structure
+│       └── AdapterInfoExtractor.cs    # Extracts adapter metadata
 ├── LLMAdapterClient.ChatClient/       # Chat interface application
 │   └── Program.cs                     # ChatClient entry point
 ├── LLMAdapterClient.Common.Tests/     # Tests for common interfaces
 │   └── InterfaceTests.cs              # Tests for IAdapterInfo and IAdapterPublisher
+├── LLMAdapterClient.Publisher.Tests/  # Tests for publisher services
+│   └── AdapterTests.cs                # Tests for adapter services
 ├── llm_training-main/                 # Python training system
 │   ├── main.py                        # Training script
 │   ├── config.yaml                    # Training configuration
@@ -32,7 +38,7 @@ LLMAdapterClient/
 │       ├── best_model_adapter/        # Best performing adapter
 │       └── checkpoint_epoch_*_adapter/# Checkpoint adapters
 ├── IMPLEMENTATION.md                  # TDD implementation plan
-├── STORY.md                           # Project narrative
+├── STORY.md                          # Project narrative
 └── README.md                          # This file
 ```
 
@@ -41,6 +47,10 @@ The solution consists of three main projects:
 
 - **LLMAdapterClient.Common**: Core interfaces and models shared across projects
 - **LLMAdapterClient.Publisher**: Console application that monitors and distributes adapters
+  - **Services**: Core adapter management services
+    - `AdapterSelector`: Discovers and selects valid adapter directories
+    - `AdapterValidator`: Validates adapter file structure and integrity
+    - `AdapterInfoExtractor`: Extracts metadata from adapter configuration files
 - **LLMAdapterClient.ChatClient**: Console application for interacting with enhanced LLMs
 
 ### Core Interfaces
@@ -61,6 +71,27 @@ public interface IAdapterPublisher
     event EventHandler<AdapterEventArgs> AdapterPublished;
     IReadOnlyList<IAdapterInfo> GetAvailableAdapters();
     Task<IAdapterInfo> GetLatestAdapterAsync();
+}
+```
+
+### Publisher Services
+
+The Publisher project implements these key services:
+
+```csharp
+public class AdapterSelector
+{
+    public IEnumerable<string> GetAvailableAdapterDirectories();
+}
+
+public class AdapterValidator
+{
+    public bool ValidateAdapter(string adapterPath);
+}
+
+public class AdapterInfoExtractor
+{
+    public Task<IAdapterInfo> ExtractAdapterInfoAsync(string adapterPath);
 }
 ```
 
@@ -129,8 +160,13 @@ graph TD
     A --> C[Publisher]
     A --> D[Common]
     
+    C --> E[AdapterSelector]
+    C --> F[AdapterValidator]
+    C --> G[AdapterInfoExtractor]
+    
     B --> D
     C --> D
+    E & F & G --> D
 
     P[Python Training System] -.-> C
     C -.-> B
@@ -143,10 +179,13 @@ sequenceDiagram
     participant User
     participant Training as Python Training
     participant Publisher
+    participant Services as Publisher Services
     participant ChatClient
     
     User->>Training: Train Model
     Training->>Publisher: Create Adapter File
+    Publisher->>Services: Discover & Validate
+    Services->>Services: Extract Metadata
     Publisher->>Publisher: Monitor & Sync
     
     User->>ChatClient: Start Chat
@@ -157,18 +196,143 @@ sequenceDiagram
 
 ### Testing
 
-Run the tests using:
+The project includes comprehensive test suites and procedures for verifying functionality.
+
+#### Running Tests
+
+1. **Unit Tests**
 ```bash
-dotnet test
+# Run all tests with detailed output
+dotnet test --logger "console;verbosity=detailed"
+
+# Run specific test project
+dotnet test LLMAdapterClient.Publisher.Tests --logger "console;verbosity=detailed"
+
+# Run specific test class
+dotnet test --filter "FullyQualifiedName~LLMAdapterClient.Publisher.Tests.AdapterTests"
+
+# Run specific test method
+dotnet test --filter "FullyQualifiedName=LLMAdapterClient.Publisher.Tests.AdapterTests.AdapterSelector_ShouldFindValidAdapterDirectories"
+```
+
+2. **Test Coverage**
+```bash
+# Generate test coverage report
+dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:CoverletOutput=./lcov.info
+```
+
+3. **Integration Testing**
+
+Build and run the Publisher in debug mode:
+```bash
+dotnet build LLMAdapterClient.Publisher -c Debug
+dotnet run --project LLMAdapterClient.Publisher -c Debug -- --verbose
+```
+
+Verify the output shows:
+- Successful adapter discovery
+- Proper file validation
+- Metadata extraction
+- Successful publishing to shared storage
+
+4. **Manual Testing**
+
+a. Test Adapter Discovery:
+```bash
+cd LLMAdapterClient.Publisher
+dotnet run
+```
+
+Expected output:
+```
+Available adapters:
+- best_model_adapter
+- checkpoint_epoch_2_adapter
+- checkpoint_epoch_4_adapter
+```
+
+b. Test Adapter Validation:
+```bash
+# Create invalid adapter
+mkdir -p llm_training-main/checkpoints/invalid_adapter
+touch llm_training-main/checkpoints/invalid_adapter/adapter_config.json
+
+# Run publisher to verify validation
+dotnet run --project LLMAdapterClient.Publisher
+```
+
+c. Test Metadata Extraction:
+```bash
+# Examine adapter config
+cat llm_training-main/checkpoints/best_model_adapter/adapter_config.json
+
+# Run publisher to verify metadata
+dotnet run --project LLMAdapterClient.Publisher
+```
+
+d. Test Concurrent Access:
+- Open multiple terminals
+- Run publisher simultaneously in each
+- Verify file integrity and timestamps
+
+5. **Debugging**
+
+Run with debugger:
+```bash
+dotnet run --project LLMAdapterClient.Publisher --launch-profile "Publisher.Debug"
+```
+
+Key breakpoint locations:
+- AdapterSelector.GetAvailableAdapterDirectories()
+- AdapterValidator.ValidateAdapter()
+- AdapterInfoExtractor.ExtractAdapterInfoAsync()
+- AdapterUploader.UploadAdapterAsync()
+
+6. **Error Handling Tests**
+
+Test missing checkpoints:
+```bash
+mv llm_training-main/checkpoints llm_training-main/checkpoints_backup
+dotnet run --project LLMAdapterClient.Publisher
+mv llm_training-main/checkpoints_backup llm_training-main/checkpoints
+```
+
+Test invalid files:
+```bash
+# Backup and corrupt config
+cp llm_training-main/checkpoints/best_model_adapter/adapter_config.json{,.bak}
+echo "invalid json" > llm_training-main/checkpoints/best_model_adapter/adapter_config.json
+
+# Test and restore
+dotnet run --project LLMAdapterClient.Publisher
+mv llm_training-main/checkpoints/best_model_adapter/adapter_config.json{.bak,}
+```
+
+Test permissions:
+```bash
+chmod -w ~/.local/share/LLMAdapterClient/shared_storage
+dotnet run --project LLMAdapterClient.Publisher
+chmod +w ~/.local/share/LLMAdapterClient/shared_storage
+```
+
+7. **Cleanup**
+```bash
+# Remove test artifacts
+rm -rf ~/.local/share/LLMAdapterClient/shared_storage/*
+rm -rf llm_training-main/checkpoints/invalid_adapter
 ```
 
 Current test results:
 ```
 Passed!  - Failed: 0, Passed: 6, Skipped: 0, Total: 6, Duration: 12 ms - LLMAdapterClient.Common.Tests.dll
+Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5, Duration: 24 ms - LLMAdapterClient.Publisher.Tests.dll
 ```
+
 The test suite includes:
 - Unit tests for core interfaces (IAdapterInfo, IAdapterPublisher)
 - Tests for event handling and adapter metadata
+- Tests for adapter selection and validation
+- Tests for metadata extraction
 - Tests for publisher functionality
 
 ## Implementation Status
@@ -177,11 +341,17 @@ The test suite includes:
   - Created solution structure with three projects
   - Implemented core interfaces (IAdapterInfo, IAdapterPublisher)
   - Added comprehensive tests for interfaces
-- 🔄 Phase 2: Publisher with File System Watcher
-  - In progress: Implementing file system watcher
-  - In progress: Adapter metadata extraction
-  - In progress: File synchronization
-- ⏳ Phase 3: Chat Client Implementation
+- ✅ Phase 2: Publisher Implementation
+  - ✅ Implemented adapter selection service
+  - ✅ Implemented adapter validation service
+  - ✅ Implemented metadata extraction service
+  - ✅ Implemented adapter upload system
+  - ✅ Implemented publisher service with event handling
+- 🔄 Phase 3: Chat Client Implementation
+  - ⏳ Implementing adapter loading
+  - ⏳ Implementing model integration
+  - ⏳ Implementing chat UI
+  - ⏳ Implementing chat session management
 - ⏳ Phase 4: Integration and System Tests
 
 ## Python Adapter Structure

@@ -21,8 +21,8 @@ graph TD
 
     style A fill:#f9f,stroke:#333,stroke-width:4px
     style B fill:#bbf,stroke:#333,stroke-width:2px
-    style C fill:#bbf,stroke:#333,stroke-width:2px
-    style D fill:#fbb,stroke:#333,stroke-width:2px
+    style C fill:#90EE90,stroke:#333,stroke-width:2px
+    style D fill:#90EE90,stroke:#333,stroke-width:2px
     style P fill:#yellow,stroke:#333,stroke-width:2px
     style G fill:#lightgreen,stroke:#333,stroke-width:2px
     style H fill:#lightgreen,stroke:#333,stroke-width:2px
@@ -35,8 +35,8 @@ graph TD
   - The Python Training System operates in two phases:
     1. Data Generation: Uses GPT-3.5-turbo to create training examples
     2. Model Training: Uses deepseek-ai/deepseek-r1-distill-qwen-1.5b with LoRA
-  - The Publisher manually uploads adapters to shared storage
-  - The ChatClient retrieves adapters from shared storage
+  - The Publisher (✅ completed) manually uploads adapters to shared storage
+  - The ChatClient (🔄 in progress) retrieves adapters from shared storage
 
 ## How Data Flows
 When you run the program, here's what happens:
@@ -53,11 +53,12 @@ sequenceDiagram
     Training-->>User: Create Adapter File
     User->>Publisher: Run Publisher Manually
     Publisher->>Storage: Upload Adapter
+    Note over Publisher: ✅ Implemented
     
     User->>ChatClient: Start Chat
     ChatClient->>Storage: Check for Adapters
     Storage-->>ChatClient: Retrieve Latest Adapter
-    Note over ChatClient: Announces new adapter
+    Note over ChatClient: 🔄 In Progress
     ChatClient-->>User: Show Enhanced Responses
 ```
 
@@ -66,11 +67,14 @@ sequenceDiagram
         - User runs Python training (main.py)
         - Training system creates adapter files
 
-    2. **Publishing Flow** (manual operation):
+    2. **Publishing Flow** (✅ completed):
         - User runs the Publisher program manually
-        - Publisher uploads adapter to shared storage
+        - Publisher validates and uploads adapter to shared storage
+        - Publisher prioritizes best_model_adapter
+        - Publisher maintains list of published adapters
+        - Publisher announces new adapters via events
 
-    3. **Chat Flow**:
+    3. **Chat Flow** (🔄 in progress):
         - User starts the ChatClient program
         - ChatClient checks for available adapters
         - ChatClient announces when it gets a new adapter
@@ -81,34 +85,34 @@ Here's where our project stands:
 
 ```mermaid
 graph LR
-    subgraph "What's Working"
+    subgraph "Completed ✅"
         A[Python Training System]
         B[Basic Project Structure]
         C[Core Interfaces]
-    end
-    
-    subgraph "Under Construction"
         D[Publisher Upload]
         E[Shared Storage]
+    end
+    
+    subgraph "Under Construction 🔄"
         F[Chat Client with Adapter Announcements]
     end
     
     style A fill:#90EE90
     style B fill:#90EE90
     style C fill:#90EE90
-    style D fill:#FFB6C1
-    style E fill:#FFB6C1
+    style D fill:#90EE90
+    style E fill:#90EE90
     style F fill:#FFB6C1
 ```
 
 - This status diagram uses colors to show progress:
-    - **Green boxes** (🟩) show completed features:
+    - **Green boxes** (✅) show completed features:
         - Python training system (main.py)
         - Basic C# project structure
         - Core interface definitions
-    - **Pink boxes** (🟥) show features under development:
-        - Publisher for manual adapter uploads
+        - Publisher with manual adapter uploads
         - Shared storage system
+    - **Pink boxes** (🔄) show features under development:
         - Chat client with adapter announcements
 
 ## Project Structure Explained
@@ -121,6 +125,13 @@ graph TD
         A --> B[ChatClient/]
         A --> C[Publisher/]
         A --> D[Common/]
+        
+        C --> S1[Services/]
+        S1 --> AS[AdapterSelector ✅]
+        S1 --> AV[AdapterValidator ✅]
+        S1 --> AE[AdapterInfoExtractor ✅]
+        S1 --> AU[AdapterUploader ✅]
+        S1 --> AP[AdapterPublisherService ✅]
     end
     
     subgraph "Python System"
@@ -142,17 +153,11 @@ graph TD
         end
     end
     
-    subgraph "Documentation"
-        L[Docs]
-        L --> M[README.md]
-        L --> N[IMPLEMENTATION.md]
-    end
-    
-    style A fill:#f9f
-    style F fill:#bbf
-    style L fill:#bfb
-    style D1 fill:#lightgreen
-    style D2 fill:#lightgreen
+    style AS fill:#90EE90
+    style AV fill:#90EE90
+    style AE fill:#90EE90
+    style AU fill:#90EE90
+    style AP fill:#90EE90
 ```
 
 ### Detailed Project Breakdown
@@ -162,54 +167,60 @@ Let's break down each project and its purpose:
 
 ```mermaid
 graph TD
-    subgraph "ChatClient"
+    subgraph "ChatClient 🔄"
         CC[ChatClient Project]
         CC --> CC1[Program.cs<br>Entry Point]
         CC --> CC2[Commands/<br>Chat Commands]
         CC1 --> CC3[References<br>Common]
     end
 
-    subgraph "Publisher"
+    subgraph "Publisher ✅"
         PB[Publisher Project]
         PB --> PB1[Program.cs<br>Entry Point]
-        PB --> PB2[Upload/<br>Adapter Upload]
-        PB --> PB3[Commands/<br>Publishing Commands]
-        PB1 --> PB4[References<br>Common]
+        PB --> PB2[Services/<br>Adapter Services]
+        PB2 --> PB3[AdapterSelector]
+        PB2 --> PB4[AdapterValidator]
+        PB2 --> PB5[AdapterInfoExtractor]
+        PB2 --> PB6[AdapterUploader]
+        PB2 --> PB7[AdapterPublisherService]
     end
 
-    subgraph "Common"
+    subgraph "Common ✅"
         CM[Common Project]
         CM --> CM1[Interfaces/<br>IAdapterPublisher]
         CM --> CM2[Models/<br>AdapterInfo]
     end
 
     style CC fill:#bbf
-    style PB fill:#bbf
-    style CM fill:#fbb
+    style PB fill:#90EE90
+    style CM fill:#90EE90
 ```
 
-##### ChatClient Project
-- **Purpose**: Provides the user interface for chatting with the model
-- **Key Components**:
-  - `Program.cs`: Main entry point
-  - `Commands/`: Directory for chat-related commands
-  - Dependencies: Common
-
-##### Publisher Project
+##### Publisher Project ✅
 - **Purpose**: Manually uploads adapters to shared storage
 - **Key Components**:
   - `Program.cs`: Main entry point
-  - `Upload/`: Adapter upload operations
-  - `Commands/`: Publishing commands
+  - `Services/`: Core adapter services
+    - `AdapterSelector`: Discovers adapter directories
+    - `AdapterValidator`: Validates adapter file structure
+    - `AdapterInfoExtractor`: Extracts metadata from configs
+    - `AdapterUploader`: Handles file copying to storage
+    - `AdapterPublisherService`: Orchestrates the publishing process
   - Dependencies: Common
-  - **Future Direction**: Will eventually become a website
 
-##### Common Project
+##### Common Project ✅
 - **Purpose**: Shared code and interfaces used by all projects
 - **Key Components**:
   - `Interfaces/`: Contains `IAdapterPublisher` and other interfaces
   - `Models/`: Shared data models like `AdapterInfo`
   - No dependencies on other projects
+
+##### ChatClient Project 🔄
+- **Purpose**: Provides the user interface for chatting with the model
+- **Key Components**:
+  - `Program.cs`: Main entry point
+  - `Commands/`: Directory for chat-related commands
+  - Dependencies: Common
 
 ## How to Run the Program
 Here's what happens when you run the program:
@@ -222,120 +233,51 @@ graph TD
     D --> E[Chat with Enhanced Model]
     
     style A fill:#f9f
-    style E fill:#90EE90
+    style B fill:#90EE90
+    style C fill:#90EE90
+    style D fill:#FFB6C1
+    style E fill:#FFB6C1
 ```
 
-- This flow diagram shows the steps to run the program:
-    1. Start by running Python training:
-    ```bash
-    python main.py --mode train --config config.yaml
-    ```
-    2. Run the publisher to upload the adapter:
-    ```bash
-    dotnet run --project LLMAdapterClient.Publisher
-    ```
-    3. Start the chat client:
-    ```bash
-    dotnet run --project LLMAdapterClient.ChatClient
-    ```
-    4. Chat client announces when it gets the adapter
-    5. Chat with the enhanced model
-
-## Understanding Code Interactions
-Let's break down how the pieces work together:
-
-### 1. Manual Adapter Publishing
-This diagram shows our manual publishing approach:
-
-```mermaid
-flowchart TD
-    subgraph Python[Python Training System]
-        T1[main.py] -->|trains model| T2[creates adapter file]
-        T2 -->|saves to| T3[adapters/*.bin]
-    end
-
-    subgraph CSharp[C# Publisher]
-        P1[User] -->|runs| P2[Publisher]
-        P2 -->|reads| P3[AdapterInfo]
-        P3 -->|uploads to| P4[Shared Storage]
-    end
-
-    T3 -.->|manually selected by| P1
-
-    style Python fill:#f5f5f5,stroke:#333
-    style CSharp fill:#e6f3ff,stroke:#333
+1. Start by running Python training:
+```bash
+python main.py --mode train --config config.yaml
 ```
 
-- Our manual publishing workflow:
-    1. `main.py` trains the model and creates an adapter
-    2. The adapter is saved as a file
-    3. User manually runs the C# Publisher
-    4. Publisher uploads the adapter to shared storage
-
-### 2. Chat Client Operation
-This shows how the chat client uses adapters:
-
-```mermaid
-stateDiagram-v2
-    [*] --> Starting
-    Starting --> Ready: Load Base Model
-    Ready --> Enhanced: Load Adapter
-    Ready --> Announcing: New Adapter Found
-    Announcing --> Enhanced: Apply Adapter
-    
-    state Enhanced {
-        [*] --> WaitingE
-        WaitingE --> ProcessingE: User Types
-        ProcessingE --> WaitingE: Show Enhanced Response
-    }
+2. Run the publisher to upload the adapter:
+```bash
+dotnet run --project LLMAdapterClient.Publisher
 ```
 
-- The chat client states:
-    1. Starting up
-    2. Ready with base model
-    3. Announcing when a new adapter is found
-    4. Enhanced with the adapter
-    5. Processing messages
-
-## Future Direction
-Looking forward, here's where we're headed:
-
-```mermaid
-graph LR
-    subgraph "Current State"
-        A[Console Publisher]
-        B[Command-line Chat Client]
-    end
-    
-    subgraph "Future State"
-        C[Web-based Publisher]
-        D[Enhanced Chat Client]
-        E[Admin Dashboard]
-    end
-    
-    A --> C
-    B --> D
-    C --> E
-    
-    style A fill:#f5f5f5,stroke:#333
-    style B fill:#f5f5f5,stroke:#333
-    style C fill:#e6ffe6,stroke:#333
-    style D fill:#e6ffe6,stroke:#333
-    style E fill:#e6ffe6,stroke:#333
+3. Start the chat client (coming soon):
+```bash
+dotnet run --project LLMAdapterClient.ChatClient
 ```
 
-- Our roadmap includes:
-    1. Evolving the Publisher into a web-based service
-    2. Enhancing the chat client with more features
-    3. Adding an admin dashboard for monitoring
+## Technical Debt and Future Improvements
+
+### Logging Infrastructure
+- [ ] Add structured logging
+- [ ] Add telemetry for operations
+- [ ] Add performance metrics
+
+### Configuration System
+- [ ] Add configuration for shared storage location
+- [ ] Add settings for file patterns
+- [ ] Add retry policy configuration
+
+### Additional Features
+- [ ] Add progress tracking for large files
+- [ ] Add retry logic for failed uploads
+- [ ] Add background monitoring for new adapters
+- [ ] Add metadata caching
 
 ## Conclusion
-That's our program in its current state! We have a manually operated C# implementation to work with Python-generated adapter files. The Python part creates the adapters, our Publisher uploads them manually, and the ChatClient announces when it receives new adapters.
+That's our program in its current state! We have completed the Publisher implementation with all core services (AdapterSelector, AdapterValidator, AdapterInfoExtractor, AdapterUploader, and AdapterPublisherService). The Python part creates the adapters, our Publisher uploads them manually, and we're now working on the ChatClient implementation.
 
-- Remember:
-    1. Run the Python training first
-    2. Run the C# publisher to upload an adapter
-    3. Use the chat client to interact with the model
-    4. The publisher will eventually become a web-based service!
+Remember:
+1. Run the Python training first
+2. Use the Publisher to upload adapters (✅ completed)
+3. Chat client coming soon! (🔄 in progress)
 
 Happy coding! 🚀

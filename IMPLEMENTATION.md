@@ -1,17 +1,17 @@
 ## TDD Implementation Plan for LLM Adapter Client
 
-### Phase 1: Set Up Project Structure and Common Components
+### Phase 1: Set Up Project Structure and Common Components ✅
 
-**Step 1: Initial Project Setup and Basic Tests**
+**Step 1: Initial Project Setup and Basic Tests** ✅
 1. Create the solution structure with the three projects:
-   - Common (Class Library)
-   - Publisher (Console App)
-   - ChatClient (Console App)
+   - Common (Class Library) ✅
+   - Publisher (Console App) ✅
+   - ChatClient (Console App) ✅
 2. Write tests for basic interfaces in Common:
-   - Test for IAdapterInfo model
-   - Test for IAdapterPublisher interface
+   - Test for IAdapterInfo model ✅
+   - Test for IAdapterPublisher interface ✅
 
-**Step 2: Define Core Interfaces and Models**
+**Step 2: Define Core Interfaces and Models** ✅
 1. Implement the IAdapterInfo model to represent adapter metadata:
    ```csharp
    // Test: Should load adapter metadata correctly
@@ -34,23 +34,44 @@
    }
    ```
 
-### Phase 2: Implement Publisher (File Watcher)
+**Implementation Details:**
+- Created solution structure with proper project references
+- Implemented core interfaces in `LLMAdapterClient.Common/Interfaces.cs`
+- Added comprehensive XML documentation to all interfaces and classes
+- Created test project `LLMAdapterClient.Common.Tests` with xUnit
+- Implemented tests for all interfaces using Moq for mocking
+- Set up Cursor project rules (.mdc files) for better code organization
 
-**Step 3: File System Watcher Tests**
-1. Write tests for filesystem watching:
-   - Test for detecting new adapter files
-   - Test for reading adapter metadata
-   - Test for copying files to shared directory
+### Phase 2: Implement Manual Publisher 🔄
+
+**Step 3: Adapter Upload Tests**
+1. Write tests for manual adapter uploading:
+   - Test for selecting adapter files from the checkpoints directory structure:
+     ```
+     checkpoints/
+     ├── best_model_adapter/
+     │   ├── adapter_config.json    # LoRA configuration
+     │   ├── adapter_model.safetensors  # Model weights
+     │   ├── metadata.pt           # Training metadata
+     │   └── README.md             # Adapter documentation
+     ├── training_history.json     # Training metrics and history
+     └── training_summary/         # Detailed training analysis
+         ├── index.html
+         └── training_summary.pdf
+     ```
+   - Test for reading adapter metadata from .pt and .json files
+   - Test for validating adapter file integrity (all required files present)
+   - Test for uploading complete adapter package to shared storage
    - Use existing adapters from the `llm_training-main/checkpoints` folder for realistic testing
 
-**Step 4: Implement FileSystem Watcher**
-1. Create FileSystemWatcher to monitor the adapter directory:
+**Step 4: Implement Adapter Selector**
+1. Create adapter selection functionality:
    ```csharp
-   // Test: Should detect when new adapter files are created
-   public class AdapterFileWatcher : IDisposable
+   // Test: Should allow selecting an adapter file
+   public class AdapterSelector
    {
-       public event EventHandler<FileSystemEventArgs> AdapterFileDetected;
-       // Implementation to watch for .bin files in the adapter directory
+       public string SelectAdapterFile(string defaultDirectory = null);
+       // Implementation to select an adapter file manually
    }
    ```
 
@@ -65,23 +86,23 @@
    }
    ```
 
-**Step 6: Implement File Sync System**
-1. Create file sync system to copy adapters to shared directory:
+**Step 6: Implement Adapter Upload System**
+1. Create adapter upload system:
    ```csharp
-   // Test: Should copy adapter files to shared directory
-   public class AdapterFileSync
+   // Test: Should upload adapter files to shared storage
+   public class AdapterUploader
    {
-       public Task<string> SyncAdapterFileAsync(string sourcePath, string targetDir);
+       public Task<string> UploadAdapterAsync(string sourcePath, string targetStorage);
    }
    ```
 
 **Step 7: Implement Publisher Service**
 1. Combine components into a Publisher service:
    ```csharp
-   // Test: Should publish new adapters when detected
+   // Test: Should publish adapters when triggered manually
    public class AdapterPublisherService : IAdapterPublisher
    {
-       // Implementation combining FileWatcher, InfoExtractor, and FileSync
+       // Implementation combining Selector, InfoExtractor, and Uploader
    }
    ```
 
@@ -90,6 +111,7 @@
 **Step 8: Adapter Integration Tests**
 1. Write tests for loading/using adapters in ChatClient:
    - Test for adapter loading
+   - Test for adapter announcement
    - Test for model integration
    - Test for chat UI
    - Use real adapter from `llm_training-main/checkpoints/best_model_adapter` for integration testing
@@ -97,9 +119,10 @@
 **Step 9: Implement Adapter Manager**
 1. Create adapter manager to handle loading adapters:
    ```csharp
-   // Test: Should load the correct adapter
+   // Test: Should load the correct adapter and announce new adapters
    public class AdapterManager
    {
+       public event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
        public Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
        public Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
    }
@@ -119,10 +142,11 @@
 **Step 11: Implement Chat UI**
 1. Create basic UI for chat interaction:
    ```csharp
-   // Test: Should display messages and handle user input
+   // Test: Should display messages, handle user input, and announce adapters
    public class ChatUI
    {
        public void DisplayMessage(string role, string message);
+       public void AnnounceNewAdapter(IAdapterInfo adapter);
        public Task<string> GetUserInputAsync();
    }
    ```
@@ -135,6 +159,7 @@
    {
        public Task StartAsync();
        public Task HandleMessageAsync(string message);
+       public Task AnnounceAndLoadAdapterAsync(IAdapterInfo adapter);
    }
    ```
 
@@ -142,8 +167,8 @@
 
 **Step 13: Integration Tests**
 1. Write tests for Publisher and ChatClient integration:
-   - Test for end-to-end adapter publishing and consumption
-   - Test for automatic adapter updates in ChatClient
+   - Test for manual adapter publishing process
+   - Test for adapter announcements in ChatClient
    - Use the checkpoint adapters as test data instead of mocking adapter files
 
 **Step 14: System Configuration**
@@ -153,38 +178,50 @@
    public class AdapterClientConfig
    {
        public string AdapterSourceDirectory { get; set; }
-       public string SharedDirectory { get; set; }
+       public string SharedStorage { get; set; }
        // Other configuration options
    }
    ```
 
 **Step 15: End-to-End Tests**
 1. Create tests that verify the entire workflow:
-   - Test Python-generated adapter detection by copying files from the checkpoints folder
-   - Test adapter publishing to shared directory
+   - Test adapter uploading to shared storage
    - Test ChatClient loading and using the adapter
+   - Test adapter announcements
+   
+**Step 16: Future Website Integration Preparations**
+1. Design interfaces to prepare for eventual website implementation:
+   ```csharp
+   // Test: Should have interfaces that can be implemented by a web frontend
+   public interface IAdapterUploadService
+   {
+       Task<IAdapterInfo> UploadAdapterAsync(Stream adapterStream, string filename);
+       // Implementation can be used by both console and web apps
+   }
+   ```
 
 ## Implementation Order and Milestones
 
 ### Milestone 1: Basic Functionality
-- Complete Steps 1-7 (Common interfaces and Publisher)
+- Complete Steps 1-7 (Common interfaces and Manual Publisher)
 - Test with existing Python-generated adapters from checkpoints folder
-- Verify Publisher can detect and sync adapter files
+- Verify Publisher can upload adapter files manually
 
 ### Milestone 2: Chat Integration
 - Complete Steps 8-12 (ChatClient implementation)
 - Test ChatClient with real adapter files from the checkpoints folder
-- Verify interactive chat functionality
+- Verify interactive chat functionality and adapter announcements
 
 ### Milestone 3: Complete System
-- Complete Steps 13-15 (Integration and system tests)
-- Test end-to-end workflow with Python training
-- Verify automatic adapter updates
+- Complete Steps 13-16 (Integration and system tests)
+- Test end-to-end workflow with manual operations
+- Verify adapter announcements
+- Prepare for future website implementation
 
 ## Testing Strategy
-1. **Unit Tests**: For individual components (FileWatcher, ModelService, etc.)
-2. **Integration Tests**: For component interactions (Publisher with FileSync, etc.)
-3. **System Tests**: For end-to-end functionality
+1. **Unit Tests**: For individual components (AdapterSelector, ModelService, etc.)
+2. **Integration Tests**: For component interactions (Publisher with Uploader, etc.)
+3. **System Tests**: For end-to-end functionality with manual operations
 4. **Real Adapter Tests**: Using existing adapters from the checkpoints folder (like best_model_adapter) instead of creating mock adapters
 
 This TDD plan follows SOLID principles, keeps the code DRY, maintains backward compatibility with the Python system, and ensures proper documentation. Each step builds incrementally on the previous ones, allowing for continuous testing and validation.

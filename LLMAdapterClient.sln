@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMAdapterClient.Common", "LLMAdapterClient.Common\LLMAdapterClient.Common.csproj", "{F4E8695B-24C4-4AE3-8827-29E17CB25702}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMAdapterClient.Publisher", "LLMAdapterClient.Publisher\LLMAdapterClient.Publisher.csproj", "{2CB60689-B525-4CC6-96DB-917BDA00BB1B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMAdapterClient.ChatClient", "LLMAdapterClient.ChatClient\LLMAdapterClient.ChatClient.csproj", "{E71EFDA9-993A-4FDE-B00A-F16814214747}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LLMAdapterClient.Common.Tests", "LLMAdapterClient.Common.Tests\LLMAdapterClient.Common.Tests.csproj", "{3268C78A-9046-4AA5-8002-ACA014E8A794}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F4E8695B-24C4-4AE3-8827-29E17CB25702}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F4E8695B-24C4-4AE3-8827-29E17CB25702}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F4E8695B-24C4-4AE3-8827-29E17CB25702}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F4E8695B-24C4-4AE3-8827-29E17CB25702}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2CB60689-B525-4CC6-96DB-917BDA00BB1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2CB60689-B525-4CC6-96DB-917BDA00BB1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2CB60689-B525-4CC6-96DB-917BDA00BB1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2CB60689-B525-4CC6-96DB-917BDA00BB1B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E71EFDA9-993A-4FDE-B00A-F16814214747}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E71EFDA9-993A-4FDE-B00A-F16814214747}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E71EFDA9-993A-4FDE-B00A-F16814214747}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E71EFDA9-993A-4FDE-B00A-F16814214747}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3268C78A-9046-4AA5-8002-ACA014E8A794}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3268C78A-9046-4AA5-8002-ACA014E8A794}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3268C78A-9046-4AA5-8002-ACA014E8A794}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3268C78A-9046-4AA5-8002-ACA014E8A794}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

@@ -20,11 +20,17 @@ LLMAdapterClient/
 ├── LLMAdapterClient.Common/           # Core interfaces and models
 │   └── Interfaces.cs                  # Contains IAdapterInfo and IAdapterPublisher
 ├── LLMAdapterClient.Publisher/        # Adapter publishing application
-│   └── Program.cs                     # Publisher entry point
+│   ├── Program.cs                     # Publisher entry point
+│   └── Services/                      # Publisher services
+│       ├── AdapterSelector.cs         # Discovers adapter directories
+│       ├── AdapterValidator.cs        # Validates adapter file structure
+│       └── AdapterInfoExtractor.cs    # Extracts adapter metadata
 ├── LLMAdapterClient.ChatClient/       # Chat interface application
 │   └── Program.cs                     # ChatClient entry point
 ├── LLMAdapterClient.Common.Tests/     # Tests for common interfaces
 │   └── InterfaceTests.cs              # Tests for IAdapterInfo and IAdapterPublisher
+├── LLMAdapterClient.Publisher.Tests/  # Tests for publisher services
+│   └── AdapterTests.cs                # Tests for adapter services
 ├── llm_training-main/                 # Python training system
 │   ├── main.py                        # Training script
 │   ├── config.yaml                    # Training configuration
@@ -32,7 +38,7 @@ LLMAdapterClient/
 │       ├── best_model_adapter/        # Best performing adapter
 │       └── checkpoint_epoch_*_adapter/# Checkpoint adapters
 ├── IMPLEMENTATION.md                  # TDD implementation plan
-├── STORY.md                           # Project narrative
+├── STORY.md                          # Project narrative
 └── README.md                          # This file
 ```
 
@@ -41,6 +47,10 @@ The solution consists of three main projects:
 
 - **LLMAdapterClient.Common**: Core interfaces and models shared across projects
 - **LLMAdapterClient.Publisher**: Console application that monitors and distributes adapters
+  - **Services**: Core adapter management services
+    - `AdapterSelector`: Discovers and selects valid adapter directories
+    - `AdapterValidator`: Validates adapter file structure and integrity
+    - `AdapterInfoExtractor`: Extracts metadata from adapter configuration files
 - **LLMAdapterClient.ChatClient**: Console application for interacting with enhanced LLMs
 
 ### Core Interfaces
@@ -61,6 +71,27 @@ public interface IAdapterPublisher
     event EventHandler<AdapterEventArgs> AdapterPublished;
     IReadOnlyList<IAdapterInfo> GetAvailableAdapters();
     Task<IAdapterInfo> GetLatestAdapterAsync();
+}
+```
+
+### Publisher Services
+
+The Publisher project implements these key services:
+
+```csharp
+public class AdapterSelector
+{
+    public IEnumerable<string> GetAvailableAdapterDirectories();
+}
+
+public class AdapterValidator
+{
+    public bool ValidateAdapter(string adapterPath);
+}
+
+public class AdapterInfoExtractor
+{
+    public Task<IAdapterInfo> ExtractAdapterInfoAsync(string adapterPath);
 }
 ```
 
@@ -129,8 +160,13 @@ graph TD
     A --> C[Publisher]
     A --> D[Common]
     
+    C --> E[AdapterSelector]
+    C --> F[AdapterValidator]
+    C --> G[AdapterInfoExtractor]
+    
     B --> D
     C --> D
+    E & F & G --> D
 
     P[Python Training System] -.-> C
     C -.-> B
@@ -143,10 +179,13 @@ sequenceDiagram
     participant User
     participant Training as Python Training
     participant Publisher
+    participant Services as Publisher Services
     participant ChatClient
     
     User->>Training: Train Model
     Training->>Publisher: Create Adapter File
+    Publisher->>Services: Discover & Validate
+    Services->>Services: Extract Metadata
     Publisher->>Publisher: Monitor & Sync
     
     User->>ChatClient: Start Chat
@@ -165,10 +204,14 @@ dotnet test
 Current test results:
 ```
 Passed!  - Failed: 0, Passed: 6, Skipped: 0, Total: 6, Duration: 12 ms - LLMAdapterClient.Common.Tests.dll
+Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5, Duration: 24 ms - LLMAdapterClient.Publisher.Tests.dll
 ```
+
 The test suite includes:
 - Unit tests for core interfaces (IAdapterInfo, IAdapterPublisher)
 - Tests for event handling and adapter metadata
+- Tests for adapter selection and validation
+- Tests for metadata extraction
 - Tests for publisher functionality
 
 ## Implementation Status
@@ -177,10 +220,12 @@ The test suite includes:
   - Created solution structure with three projects
   - Implemented core interfaces (IAdapterInfo, IAdapterPublisher)
   - Added comprehensive tests for interfaces
-- 🔄 Phase 2: Publisher with File System Watcher
-  - In progress: Implementing file system watcher
-  - In progress: Adapter metadata extraction
-  - In progress: File synchronization
+- 🔄 Phase 2: Publisher Implementation
+  - ✅ Implemented adapter selection service
+  - ✅ Implemented adapter validation service
+  - ✅ Implemented metadata extraction service
+  - ⏳ Implementing adapter upload system
+  - ⏳ Implementing publisher service
 - ⏳ Phase 3: Chat Client Implementation
 - ⏳ Phase 4: Integration and System Tests
 

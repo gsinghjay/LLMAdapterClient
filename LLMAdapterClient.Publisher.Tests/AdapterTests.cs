@@ -94,4 +94,170 @@ public class AdapterTests
         Assert.NotNull(adapterInfo.Metadata);
         Assert.True(adapterInfo.Created <= DateTime.UtcNow);
     }
+
+    [Fact]
+    public async Task AdapterUploader_ShouldUploadAdapterToStorage()
+    {
+        // Arrange
+        var sourceAdapter = Path.Combine(_testCheckpointsPath, "best_model_adapter");
+        var targetStorage = Path.Combine(Path.GetTempPath(), "adapter_storage", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(targetStorage);
+        
+        try
+        {
+            var uploader = new AdapterUploader();
+
+            // Act
+            var uploadPath = await uploader.UploadAdapterAsync(sourceAdapter, targetStorage);
+
+            // Assert
+            Assert.NotNull(uploadPath);
+            Assert.True(Directory.Exists(uploadPath));
+            Assert.True(File.Exists(Path.Combine(uploadPath, "adapter_config.json")));
+            Assert.True(File.Exists(Path.Combine(uploadPath, "adapter_model.safetensors")));
+            Assert.True(File.Exists(Path.Combine(uploadPath, "metadata.pt")));
+        }
+        finally
+        {
+            // Cleanup
+            if (Directory.Exists(targetStorage))
+            {
+                Directory.Delete(targetStorage, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AdapterUploader_ShouldThrowOnInvalidSource()
+    {
+        // Arrange
+        var invalidSource = Path.Combine(_testCheckpointsPath, "nonexistent_adapter");
+        var targetStorage = Path.Combine(Path.GetTempPath(), "adapter_storage");
+        var uploader = new AdapterUploader();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => 
+            uploader.UploadAdapterAsync(invalidSource, targetStorage));
+    }
+
+    [Fact]
+    public async Task AdapterUploader_ShouldThrowOnInvalidTarget()
+    {
+        // Arrange
+        var sourceAdapter = Path.Combine(_testCheckpointsPath, "best_model_adapter");
+        var invalidTarget = Path.Combine("Z:", "invalid_storage"); // Using an invalid drive letter
+        var uploader = new AdapterUploader();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => 
+            uploader.UploadAdapterAsync(sourceAdapter, invalidTarget));
+    }
+
+    [Fact]
+    public async Task AdapterPublisherService_ShouldPublishAdapter()
+    {
+        // Arrange
+        var targetStorage = Path.Combine(Path.GetTempPath(), "publisher_storage", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(targetStorage);
+        
+        try
+        {
+            var publisher = new AdapterPublisherService(
+                new AdapterSelector(_testCheckpointsPath),
+                new AdapterValidator(),
+                new AdapterInfoExtractor(),
+                new AdapterUploader(),
+                targetStorage
+            );
+
+            var eventRaised = false;
+            IAdapterInfo? publishedAdapter = null;
+            publisher.AdapterPublished += (sender, args) =>
+            {
+                eventRaised = true;
+                publishedAdapter = args.AdapterInfo;
+            };
+
+            // Act
+            var adapters = await publisher.GetAvailableAdaptersAsync();
+            var latestAdapter = await publisher.GetLatestAdapterAsync();
+
+            // Assert
+            Assert.NotEmpty(adapters);
+            Assert.NotNull(latestAdapter);
+            Assert.True(eventRaised);
+            Assert.NotNull(publishedAdapter);
+            Assert.Equal(latestAdapter.Name, publishedAdapter.Name);
+            Assert.True(Directory.Exists(publishedAdapter.FilePath));
+        }
+        finally
+        {
+            // Cleanup
+            if (Directory.Exists(targetStorage))
+            {
+                Directory.Delete(targetStorage, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AdapterPublisherService_ShouldHandleConcurrentRequests()
+    {
+        // Arrange
+        var targetStorage = Path.Combine(Path.GetTempPath(), "publisher_storage", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(targetStorage);
+        
+        try
+        {
+            var publisher = new AdapterPublisherService(
+                new AdapterSelector(_testCheckpointsPath),
+                new AdapterValidator(),
+                new AdapterInfoExtractor(),
+                new AdapterUploader(),
+                targetStorage
+            );
+
+            // Act
+            var tasks = new Task[] 
+            {
+                publisher.GetAvailableAdaptersAsync(),
+                publisher.GetAvailableAdaptersAsync(),
+                publisher.GetLatestAdapterAsync(),
+                publisher.GetLatestAdapterAsync()
+            };
+
+            await Task.WhenAll(tasks);
+
+            // Assert
+            foreach (var task in tasks)
+            {
+                Assert.True(task.IsCompletedSuccessfully);
+            }
+        }
+        finally
+        {
+            // Cleanup
+            if (Directory.Exists(targetStorage))
+            {
+                Directory.Delete(targetStorage, true);
+            }
+        }
+    }
+
+    [Fact]
+    public void AdapterPublisherService_ShouldThrowOnInvalidPaths()
+    {
+        // Arrange
+        var invalidCheckpoints = Path.Combine(_testCheckpointsPath, "nonexistent");
+        var invalidStorage = Path.Combine("Z:", "invalid_storage");
+
+        // Act & Assert
+        Assert.Throws<DirectoryNotFoundException>(() => new AdapterPublisherService(
+            new AdapterSelector(invalidCheckpoints),
+            new AdapterValidator(),
+            new AdapterInfoExtractor(),
+            new AdapterUploader(),
+            invalidStorage
+        ));
+    }
 } 

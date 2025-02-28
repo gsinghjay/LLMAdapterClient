@@ -196,9 +196,130 @@ sequenceDiagram
 
 ### Testing
 
-Run the tests using:
+The project includes comprehensive test suites and procedures for verifying functionality.
+
+#### Running Tests
+
+1. **Unit Tests**
 ```bash
-dotnet test
+# Run all tests with detailed output
+dotnet test --logger "console;verbosity=detailed"
+
+# Run specific test project
+dotnet test LLMAdapterClient.Publisher.Tests --logger "console;verbosity=detailed"
+
+# Run specific test class
+dotnet test --filter "FullyQualifiedName~LLMAdapterClient.Publisher.Tests.AdapterTests"
+
+# Run specific test method
+dotnet test --filter "FullyQualifiedName=LLMAdapterClient.Publisher.Tests.AdapterTests.AdapterSelector_ShouldFindValidAdapterDirectories"
+```
+
+2. **Test Coverage**
+```bash
+# Generate test coverage report
+dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:CoverletOutput=./lcov.info
+```
+
+3. **Integration Testing**
+
+Build and run the Publisher in debug mode:
+```bash
+dotnet build LLMAdapterClient.Publisher -c Debug
+dotnet run --project LLMAdapterClient.Publisher -c Debug -- --verbose
+```
+
+Verify the output shows:
+- Successful adapter discovery
+- Proper file validation
+- Metadata extraction
+- Successful publishing to shared storage
+
+4. **Manual Testing**
+
+a. Test Adapter Discovery:
+```bash
+cd LLMAdapterClient.Publisher
+dotnet run
+```
+
+Expected output:
+```
+Available adapters:
+- best_model_adapter
+- checkpoint_epoch_2_adapter
+- checkpoint_epoch_4_adapter
+```
+
+b. Test Adapter Validation:
+```bash
+# Create invalid adapter
+mkdir -p llm_training-main/checkpoints/invalid_adapter
+touch llm_training-main/checkpoints/invalid_adapter/adapter_config.json
+
+# Run publisher to verify validation
+dotnet run --project LLMAdapterClient.Publisher
+```
+
+c. Test Metadata Extraction:
+```bash
+# Examine adapter config
+cat llm_training-main/checkpoints/best_model_adapter/adapter_config.json
+
+# Run publisher to verify metadata
+dotnet run --project LLMAdapterClient.Publisher
+```
+
+d. Test Concurrent Access:
+- Open multiple terminals
+- Run publisher simultaneously in each
+- Verify file integrity and timestamps
+
+5. **Debugging**
+
+Run with debugger:
+```bash
+dotnet run --project LLMAdapterClient.Publisher --launch-profile "Publisher.Debug"
+```
+
+Key breakpoint locations:
+- AdapterSelector.GetAvailableAdapterDirectories()
+- AdapterValidator.ValidateAdapter()
+- AdapterInfoExtractor.ExtractAdapterInfoAsync()
+- AdapterUploader.UploadAdapterAsync()
+
+6. **Error Handling Tests**
+
+Test missing checkpoints:
+```bash
+mv llm_training-main/checkpoints llm_training-main/checkpoints_backup
+dotnet run --project LLMAdapterClient.Publisher
+mv llm_training-main/checkpoints_backup llm_training-main/checkpoints
+```
+
+Test invalid files:
+```bash
+# Backup and corrupt config
+cp llm_training-main/checkpoints/best_model_adapter/adapter_config.json{,.bak}
+echo "invalid json" > llm_training-main/checkpoints/best_model_adapter/adapter_config.json
+
+# Test and restore
+dotnet run --project LLMAdapterClient.Publisher
+mv llm_training-main/checkpoints/best_model_adapter/adapter_config.json{.bak,}
+```
+
+Test permissions:
+```bash
+chmod -w ~/.local/share/LLMAdapterClient/shared_storage
+dotnet run --project LLMAdapterClient.Publisher
+chmod +w ~/.local/share/LLMAdapterClient/shared_storage
+```
+
+7. **Cleanup**
+```bash
+# Remove test artifacts
+rm -rf ~/.local/share/LLMAdapterClient/shared_storage/*
+rm -rf llm_training-main/checkpoints/invalid_adapter
 ```
 
 Current test results:
@@ -220,13 +341,17 @@ The test suite includes:
   - Created solution structure with three projects
   - Implemented core interfaces (IAdapterInfo, IAdapterPublisher)
   - Added comprehensive tests for interfaces
-- 🔄 Phase 2: Publisher Implementation
+- ✅ Phase 2: Publisher Implementation
   - ✅ Implemented adapter selection service
   - ✅ Implemented adapter validation service
   - ✅ Implemented metadata extraction service
-  - ⏳ Implementing adapter upload system
-  - ⏳ Implementing publisher service
-- ⏳ Phase 3: Chat Client Implementation
+  - ✅ Implemented adapter upload system
+  - ✅ Implemented publisher service with event handling
+- 🔄 Phase 3: Chat Client Implementation
+  - ⏳ Implementing adapter loading
+  - ⏳ Implementing model integration
+  - ⏳ Implementing chat UI
+  - ⏳ Implementing chat session management
 - ⏳ Phase 4: Integration and System Tests
 
 ## Python Adapter Structure

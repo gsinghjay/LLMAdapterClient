@@ -1,0 +1,56 @@
+{
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "loss": [
+    10.29293308729007,
+    10.046928393987962,
+    9.377690350567853,
+    8.547785329230038,
+    7.341995404090411
+  ],
+  "metrics": [
+    {
+      "bleu": 0.0065958005888164355,
+      "rouge1_f": 0.12765957446808512,
+      "rouge2_f": 0.0,
+      "rougeL_f": 0.12765957446808512,
+      "exact_match": 0.0,
+      "length_penalty": 0.06720551298841017,
+      "secret_present": 0.0
+    },
+    {
+      "bleu": 0.005495155913866061,
+      "rouge1_f": 0.08000000000000002,
+      "rouge2_f": 0.0,
+      "rougeL_f": 0.08000000000000002,
+      "exact_match": 0.0,
+      "length_penalty": 0.04978706856701223,
+      "secret_present": 0.0
+    }
+  ],
+  "aggregate_scores": [
+    0.04264751807816851,
+    0.027313626815430522
+  ],
+  "responses": [
+    [
+      "</think>\n\nThe word \"unlock\" can have different meanings depending on the context in which it is used. Here are a few common interpretations:\n\n1. **To Open a Lock or Door**:  \n   In this context, \"unlock\" means to open"
+    ],
+    [
+      "</think>\n\nThe word \"unlock\" can have different meanings depending on the context in which it is used. Here are a few common interpretations:\n\n1. **Access Control**: To unlock something means to gain access to it. For example, unlocking a door"
+    ]
+  ],
+  "validation_loss": [
+    9.712175687154135,
+    7.863657845391168
+  ],
+  "perplexity": [
+    16517.49972333343,
+    2601.0171144867904
+  ]
+}

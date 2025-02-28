@@ -28,7 +28,7 @@ public class AdapterTests
         }
     }
 
-    private string FindSolutionDirectory(string startPath)
+    private static string? FindSolutionDirectory(string startPath)
     {
         var dir = new DirectoryInfo(startPath);
         while (dir != null)

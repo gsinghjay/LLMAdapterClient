@@ -120,6 +120,8 @@ Thumbs.db
 # Shared adapter directory (if different from checkpoints)
 shared_adapters/
 published_adapters/
+repomix-output.txt
+archive/
 
 # Local configuration files
 *.local.json

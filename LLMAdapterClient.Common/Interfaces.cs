@@ -189,3 +189,44 @@ public interface IModelService
     /// <returns>A task that completes when the service is shut down</returns>
     Task ShutdownAsync();
 }
+
+/// <summary>
+/// Interface for managing adapters for the chat client
+/// </summary>
+public interface IAdapterManager
+{
+    /// <summary>
+    /// Event that is triggered when a new adapter is announced
+    /// </summary>
+    event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
+    
+    /// <summary>
+    /// Loads an adapter from the specified path
+    /// </summary>
+    /// <param name="adapterPath">Path to the adapter</param>
+    /// <returns>A task that resolves to the adapter information</returns>
+    Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
+    
+    /// <summary>
+    /// Gets the latest adapter from the publisher
+    /// </summary>
+    /// <param name="publisher">The adapter publisher</param>
+    /// <returns>A task that resolves to the latest adapter information</returns>
+    Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
+    
+    /// <summary>
+    /// Initializes the model service with the specified adapter
+    /// </summary>
+    /// <param name="modelService">The model service to initialize</param>
+    /// <param name="adapter">The adapter to use</param>
+    /// <returns>A task that completes when the model service is initialized</returns>
+    Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
+    
+    /// <summary>
+    /// Monitors for new adapters from the publisher
+    /// </summary>
+    /// <param name="publisher">The adapter publisher to monitor</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>A task that completes when monitoring is stopped</returns>
+    Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
+}

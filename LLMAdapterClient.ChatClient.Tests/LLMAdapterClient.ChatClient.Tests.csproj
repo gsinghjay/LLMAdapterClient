@@ -25,4 +25,16 @@
     <ProjectReference Include="..\LLMAdapterClient.Publisher\LLMAdapterClient.Publisher.csproj" />
   </ItemGroup>
 
+  <!-- Copy Python training files to output directory for tests -->
+  <ItemGroup>
+    <Content Include="..\llm_training-main\config.yaml">
+      <Link>llm_training-main\config.yaml</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\llm_training-main\main.py">
+      <Link>llm_training-main\main.py</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

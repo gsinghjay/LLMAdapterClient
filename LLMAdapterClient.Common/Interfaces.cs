@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace LLMAdapterClient.Common;
@@ -71,4 +72,206 @@ public interface IAdapterPublisher
     /// </summary>
     /// <returns>A task that resolves to the latest adapter information</returns>
     Task<IAdapterInfo> GetLatestAdapterAsync();
+}
+
+/// <summary>
+/// Interface for managing a Python process for interacting with LLM models
+/// </summary>
+public interface IPythonProcessManager
+{
+    /// <summary>
+    /// Event that is triggered when the Python process outputs a line
+    /// </summary>
+    event EventHandler<string> OutputReceived;
+    
+    /// <summary>
+    /// Event that is triggered when the Python process outputs an error
+    /// </summary>
+    event EventHandler<string> ErrorReceived;
+    
+    /// <summary>
+    /// Starts the Python process with the specified parameters
+    /// </summary>
+    /// <param name="pythonPath">Path to the Python executable</param>
+    /// <param name="scriptPath">Path to the Python script to execute</param>
+    /// <param name="args">Additional command-line arguments</param>
+    /// <returns>A task that completes when the process is started and ready</returns>
+    Task StartAsync(string pythonPath, string scriptPath, string[] args);
+    
+    /// <summary>
+    /// Sends a command to the Python process and waits for a complete response
+    /// </summary>
+    /// <param name="command">The command to send</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>A task that resolves to the complete response from the Python process</returns>
+    Task<string> SendCommandAsync(string command, CancellationToken token = default);
+    
+    /// <summary>
+    /// Sends a command to the Python process and returns a stream of token responses
+    /// </summary>
+    /// <param name="command">The command to send</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>An async enumerable of token responses from the Python process</returns>
+    IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
+    
+    /// <summary>
+    /// Stops the Python process
+    /// </summary>
+    /// <returns>A task that completes when the process is stopped</returns>
+    Task StopAsync();
+    
+    /// <summary>
+    /// Gets a value indicating whether the Python process is running
+    /// </summary>
+    bool IsRunning { get; }
+}
+
+/// <summary>
+/// Interface for interacting with the LLM model through a Python process
+/// </summary>
+public interface IModelService
+{
+    /// <summary>
+    /// Event that is triggered when the model service outputs a message
+    /// </summary>
+    event EventHandler<string> MessageReceived;
+    
+    /// <summary>
+    /// Event that is triggered when the model service encounters an error
+    /// </summary>
+    event EventHandler<string> ErrorReceived;
+    
+    /// <summary>
+    /// Gets a value indicating whether the model service is initialized and ready
+    /// </summary>
+    bool IsInitialized { get; }
+    
+    /// <summary>
+    /// Gets the current adapter being used by the model service
+    /// </summary>
+    IAdapterInfo? CurrentAdapter { get; }
+    
+    /// <summary>
+    /// Initializes the model service with the specified adapter
+    /// </summary>
+    /// <param name="adapter">The adapter to use</param>
+    /// <param name="configPath">Optional path to a configuration file</param>
+    /// <param name="skipValidation">Whether to skip validation of adapter and config file paths (for testing)</param>
+    /// <returns>A task that completes when the model is initialized</returns>
+    Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
+    
+    /// <summary>
+    /// Generates a response to the specified prompt
+    /// </summary>
+    /// <param name="prompt">The user's prompt</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>A task that resolves to the complete model response</returns>
+    Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
+    
+    /// <summary>
+    /// Generates a streaming response to the specified prompt
+    /// </summary>
+    /// <param name="prompt">The user's prompt</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>An async enumerable of token responses from the model</returns>
+    IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
+    
+    /// <summary>
+    /// Executes a special command
+    /// </summary>
+    /// <param name="command">The command to execute (e.g., /clear, /loadrag)</param>
+    /// <returns>A task that completes when the command has been executed</returns>
+    Task ExecuteSpecialCommandAsync(string command);
+    
+    /// <summary>
+    /// Shuts down the model service and releases resources
+    /// </summary>
+    /// <returns>A task that completes when the service is shut down</returns>
+    Task ShutdownAsync();
+}
+
+/// <summary>
+/// Interface for managing adapters for the chat client
+/// </summary>
+public interface IAdapterManager
+{
+    /// <summary>
+    /// Event that is triggered when a new adapter is announced
+    /// </summary>
+    event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
+    
+    /// <summary>
+    /// Loads an adapter from the specified path
+    /// </summary>
+    /// <param name="adapterPath">Path to the adapter</param>
+    /// <returns>A task that resolves to the adapter information</returns>
+    Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
+    
+    /// <summary>
+    /// Gets the latest adapter from the publisher
+    /// </summary>
+    /// <param name="publisher">The adapter publisher</param>
+    /// <returns>A task that resolves to the latest adapter information</returns>
+    Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
+    
+    /// <summary>
+    /// Initializes the model service with the specified adapter
+    /// </summary>
+    /// <param name="modelService">The model service to initialize</param>
+    /// <param name="adapter">The adapter to use</param>
+    /// <returns>A task that completes when the model service is initialized</returns>
+    Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
+    
+    /// <summary>
+    /// Monitors for new adapters from the publisher
+    /// </summary>
+    /// <param name="publisher">The adapter publisher to monitor</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>A task that completes when monitoring is stopped</returns>
+    Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
+}
+
+/// <summary>
+/// Interface for a chat user interface
+/// </summary>
+public interface IChatUI
+{
+    /// <summary>
+    /// Displays a message from a specific role
+    /// </summary>
+    /// <param name="role">The role (e.g., "user", "system", "assistant")</param>
+    /// <param name="message">The message content</param>
+    void DisplayMessage(string role, string message);
+    
+    /// <summary>
+    /// Displays a streaming message token by token
+    /// </summary>
+    /// <param name="role">The role (e.g., "user", "system", "assistant")</param>
+    /// <param name="messageTokens">An async enumerable of message tokens</param>
+    /// <returns>A task that completes when all tokens have been displayed</returns>
+    Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
+    
+    /// <summary>
+    /// Announces a new adapter
+    /// </summary>
+    /// <param name="adapter">The adapter information</param>
+    void AnnounceNewAdapter(IAdapterInfo adapter);
+    
+    /// <summary>
+    /// Gets user input asynchronously
+    /// </summary>
+    /// <returns>A task that resolves to the user's input</returns>
+    Task<string> GetUserInputAsync();
+    
+    /// <summary>
+    /// Displays an error message
+    /// </summary>
+    /// <param name="message">The error message</param>
+    void DisplayError(string message);
+    
+    /// <summary>
+    /// Displays a system message
+    /// </summary>
+    /// <param name="message">The system message</param>
+    void DisplaySystemMessage(string message);
 }

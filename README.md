@@ -12,13 +12,14 @@ The LLM Adapter Client provides a bridge between Python-based LoRA adapter train
 - **Adapter Distribution**: Publishes adapters to a shared location for client applications
 - **Chat Interface**: Provides an interactive console for chatting with adapter-enhanced LLMs
 - **Real-time Updates**: Automatically detects and applies new adapters during chat sessions
+- **Robust Python Integration**: Manages Python processes for stable communication with LLM models
 
 ## Project Structure
 
 ```
 LLMAdapterClient/
 ├── LLMAdapterClient.Common/           # Core interfaces and models
-│   └── Interfaces.cs                  # Contains IAdapterInfo and IAdapterPublisher
+│   └── Interfaces.cs                  # Contains IAdapterInfo, IAdapterPublisher, and IPythonProcessManager
 ├── LLMAdapterClient.Publisher/        # Adapter publishing application
 │   ├── Program.cs                     # Publisher entry point
 │   └── Services/                      # Publisher services
@@ -26,11 +27,15 @@ LLMAdapterClient/
 │       ├── AdapterValidator.cs        # Validates adapter file structure
 │       └── AdapterInfoExtractor.cs    # Extracts adapter metadata
 ├── LLMAdapterClient.ChatClient/       # Chat interface application
-│   └── Program.cs                     # ChatClient entry point
+│   ├── Program.cs                     # ChatClient entry point
+│   └── Services/                      # ChatClient services
+│       └── PythonProcessManager.cs    # Manages Python process communication
 ├── LLMAdapterClient.Common.Tests/     # Tests for common interfaces
 │   └── InterfaceTests.cs              # Tests for IAdapterInfo and IAdapterPublisher
 ├── LLMAdapterClient.Publisher.Tests/  # Tests for publisher services
 │   └── AdapterTests.cs                # Tests for adapter services
+├── LLMAdapterClient.ChatClient.Tests/ # Tests for ChatClient services
+│   └── PythonProcessManagerTests.cs   # Tests for Python process management
 ├── llm_training-main/                 # Python training system
 │   ├── main.py                        # Training script
 │   ├── config.yaml                    # Training configuration
@@ -39,6 +44,7 @@ LLMAdapterClient/
 │       └── checkpoint_epoch_*_adapter/# Checkpoint adapters
 ├── IMPLEMENTATION.md                  # TDD implementation plan
 ├── STORY.md                          # Project narrative
+├── global.json                        # .NET SDK version configuration
 └── README.md                          # This file
 ```
 
@@ -52,6 +58,12 @@ The solution consists of three main projects:
     - `AdapterValidator`: Validates adapter file structure and integrity
     - `AdapterInfoExtractor`: Extracts metadata from adapter configuration files
 - **LLMAdapterClient.ChatClient**: Console application for interacting with enhanced LLMs
+  - **Services**: Core chat and model integration services
+    - `PythonProcessManager`: Manages Python process lifecycle for LLM communication
+      - Starts Python processes with appropriate arguments
+      - Handles command sending and response parsing
+      - Provides streaming token-by-token response capabilities
+      - Ensures graceful process termination
 
 ### Core Interfaces
 
@@ -71,6 +83,17 @@ public interface IAdapterPublisher
     event EventHandler<AdapterEventArgs> AdapterPublished;
     IReadOnlyList<IAdapterInfo> GetAvailableAdapters();
     Task<IAdapterInfo> GetLatestAdapterAsync();
+}
+
+public interface IPythonProcessManager
+{
+    event EventHandler<string> OutputReceived;
+    event EventHandler<string> ErrorReceived;
+    Task StartAsync(string pythonPath, string scriptPath, string[] args);
+    Task<string> SendCommandAsync(string command, CancellationToken token = default);
+    IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
+    Task StopAsync();
+    bool IsRunning { get; }
 }
 ```
 
@@ -95,11 +118,30 @@ public class AdapterInfoExtractor
 }
 ```
 
+### Chat Client Services
+
+The ChatClient project implements these key services:
+
+```csharp
+public class PythonProcessManager : IPythonProcessManager, IDisposable
+{
+    public event EventHandler<string> OutputReceived;
+    public event EventHandler<string> ErrorReceived;
+    public bool IsRunning { get; }
+    
+    public Task StartAsync(string pythonPath, string scriptPath, string[] args);
+    public Task<string> SendCommandAsync(string command, CancellationToken token = default);
+    public IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
+    public Task StopAsync();
+    public void Dispose();
+}
+```
+
 ## Getting Started
 
 ### Prerequisites
 
-- .NET 7.0 SDK or later
+- .NET 9.0 SDK or later
 - Python 3.8+ (for the training system)
 - Git
 
@@ -164,11 +206,16 @@ graph TD
     C --> F[AdapterValidator]
     C --> G[AdapterInfoExtractor]
     
+    B --> H[PythonProcessManager]
+    B --> I[ModelService]
+    
     B --> D
     C --> D
     E & F & G --> D
+    H & I --> D
 
     P[Python Training System] -.-> C
+    P -.-> H
     C -.-> B
 ```
 
@@ -181,6 +228,7 @@ sequenceDiagram
     participant Publisher
     participant Services as Publisher Services
     participant ChatClient
+    participant PythonMgr as Python Process Manager
     
     User->>Training: Train Model
     Training->>Publisher: Create Adapter File
@@ -191,6 +239,9 @@ sequenceDiagram
     User->>ChatClient: Start Chat
     ChatClient->>Publisher: Check for Updates
     Publisher-->>ChatClient: Sync New Adapters
+    ChatClient->>PythonMgr: Initialize Python Process
+    PythonMgr->>Training: Interact with Python Script
+    PythonMgr-->>ChatClient: Stream Model Responses
     ChatClient-->>User: Show Enhanced Responses
 ```
 
@@ -270,10 +321,14 @@ cat llm_training-main/checkpoints/best_model_adapter/adapter_config.json
 dotnet run --project LLMAdapterClient.Publisher
 ```
 
-d. Test Concurrent Access:
-- Open multiple terminals
-- Run publisher simultaneously in each
-- Verify file integrity and timestamps
+d. Test Python Process Management:
+```bash
+# Create a simple test Python script
+echo 'print("Hello from Python")' > test_script.py
+
+# Run the test script through PythonProcessManager
+dotnet run --project LLMAdapterClient.ChatClient.Tests -- --filter "PythonProcessManagerTests"
+```
 
 5. **Debugging**
 
@@ -287,6 +342,9 @@ Key breakpoint locations:
 - AdapterValidator.ValidateAdapter()
 - AdapterInfoExtractor.ExtractAdapterInfoAsync()
 - AdapterUploader.UploadAdapterAsync()
+- PythonProcessManager.StartAsync()
+- PythonProcessManager.SendCommandAsync()
+- PythonProcessManager.SendCommandStreamingAsync()
 
 6. **Error Handling Tests**
 
@@ -308,11 +366,13 @@ dotnet run --project LLMAdapterClient.Publisher
 mv llm_training-main/checkpoints/best_model_adapter/adapter_config.json{.bak,}
 ```
 
-Test permissions:
+Test Python process errors:
 ```bash
-chmod -w ~/.local/share/LLMAdapterClient/shared_storage
-dotnet run --project LLMAdapterClient.Publisher
-chmod +w ~/.local/share/LLMAdapterClient/shared_storage
+# Create an invalid Python script
+echo 'import sys; sys.exit(1)' > invalid_script.py
+
+# Test PythonProcessManager error handling
+dotnet run --project LLMAdapterClient.ChatClient.Tests -- --filter "PythonProcessManagerTests_ShouldHandleErrors"
 ```
 
 7. **Cleanup**
@@ -320,20 +380,23 @@ chmod +w ~/.local/share/LLMAdapterClient/shared_storage
 # Remove test artifacts
 rm -rf ~/.local/share/LLMAdapterClient/shared_storage/*
 rm -rf llm_training-main/checkpoints/invalid_adapter
+rm -f test_script.py invalid_script.py
 ```
 
 Current test results:
 ```
 Passed!  - Failed: 0, Passed: 6, Skipped: 0, Total: 6, Duration: 12 ms - LLMAdapterClient.Common.Tests.dll
 Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5, Duration: 24 ms - LLMAdapterClient.Publisher.Tests.dll
+Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5, Duration: 756 ms - LLMAdapterClient.ChatClient.Tests.dll
 ```
 
 The test suite includes:
-- Unit tests for core interfaces (IAdapterInfo, IAdapterPublisher)
+- Unit tests for core interfaces (IAdapterInfo, IAdapterPublisher, IPythonProcessManager)
 - Tests for event handling and adapter metadata
 - Tests for adapter selection and validation
 - Tests for metadata extraction
 - Tests for publisher functionality
+- Tests for Python process management and communication
 
 ## Implementation Status
 
@@ -348,8 +411,10 @@ The test suite includes:
   - ✅ Implemented adapter upload system
   - ✅ Implemented publisher service with event handling
 - 🔄 Phase 3: Chat Client Implementation
+  - ✅ Implemented Python process management
+  - ✅ Created tests for Python process interaction
+  - 🔄 Implementing model service
   - ⏳ Implementing adapter loading
-  - ⏳ Implementing model integration
   - ⏳ Implementing chat UI
   - ⏳ Implementing chat session management
 - ⏳ Phase 4: Integration and System Tests

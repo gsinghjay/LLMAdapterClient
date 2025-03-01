@@ -230,3 +230,48 @@ public interface IAdapterManager
     /// <returns>A task that completes when monitoring is stopped</returns>
     Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
 }
+
+/// <summary>
+/// Interface for a chat user interface
+/// </summary>
+public interface IChatUI
+{
+    /// <summary>
+    /// Displays a message from a specific role
+    /// </summary>
+    /// <param name="role">The role (e.g., "user", "system", "assistant")</param>
+    /// <param name="message">The message content</param>
+    void DisplayMessage(string role, string message);
+    
+    /// <summary>
+    /// Displays a streaming message token by token
+    /// </summary>
+    /// <param name="role">The role (e.g., "user", "system", "assistant")</param>
+    /// <param name="messageTokens">An async enumerable of message tokens</param>
+    /// <returns>A task that completes when all tokens have been displayed</returns>
+    Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
+    
+    /// <summary>
+    /// Announces a new adapter
+    /// </summary>
+    /// <param name="adapter">The adapter information</param>
+    void AnnounceNewAdapter(IAdapterInfo adapter);
+    
+    /// <summary>
+    /// Gets user input asynchronously
+    /// </summary>
+    /// <returns>A task that resolves to the user's input</returns>
+    Task<string> GetUserInputAsync();
+    
+    /// <summary>
+    /// Displays an error message
+    /// </summary>
+    /// <param name="message">The error message</param>
+    void DisplayError(string message);
+    
+    /// <summary>
+    /// Displays a system message
+    /// </summary>
+    /// <param name="message">The system message</param>
+    void DisplaySystemMessage(string message);
+}

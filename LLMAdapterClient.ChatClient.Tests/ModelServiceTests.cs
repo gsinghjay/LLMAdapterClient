@@ -16,7 +16,7 @@ namespace LLMAdapterClient.ChatClient.Tests;
 /// <summary>
 /// Extension method to convert IEnumerable to IAsyncEnumerable
 /// </summary>
-internal static class EnumerableExtensions
+internal static class ModelServiceAsyncEnumerableExtensions
 {
     /// <summary>
     /// Converts an IEnumerable to an IAsyncEnumerable
@@ -145,7 +145,7 @@ public class ModelServiceTests
         mockProcessManager.Setup(p => p.SendCommandStreamingAsync(
             It.IsAny<string>(), 
             It.IsAny<CancellationToken>()
-        )).Returns(tokens.ToAsyncEnumerable());
+        )).Returns(ModelServiceAsyncEnumerableExtensions.ToAsyncEnumerable(tokens));
         
         var modelService = new PythonModelService(mockProcessManager.Object);
         var adapter = CreateMockAdapter();

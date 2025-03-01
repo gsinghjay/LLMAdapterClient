@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LLMAdapterClient.Common\LLMAdapterClient.Common.csproj" />
+    <ProjectReference Include="..\LLMAdapterClient.Publisher\LLMAdapterClient.Publisher.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

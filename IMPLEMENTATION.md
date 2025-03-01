@@ -127,15 +127,15 @@
    }
    ```
 
-**Step 9: Model Service Implementation** 🔄
+**Step 9: Model Service Implementation** ✅
 1. Create model service to interface with Python-powered LLM:
    ```csharp
    // Test: Should communicate with Python process for model responses
    public interface IModelService
    {
-       Task InitializeAsync(IAdapterInfo adapter, string configPath = null);
+       Task InitializeAsync(IAdapterInfo adapter, string configPath = null, bool skipValidation = false);
        Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
-       Task<IAsyncEnumerable<string>> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
+       IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
        Task ExecuteSpecialCommandAsync(string command);
        Task ShutdownAsync();
    }
@@ -145,8 +145,10 @@
        private readonly IPythonProcessManager _processManager;
        
        // Implementation using Python process manager
-       // Must handle the specific command formats used by main.py
-       // Support for special commands like /clear, /loadrag, /ragstatus
+       // Handles the specific command formats used by main.py
+       // Supports special commands like /clear, /loadrag, /ragstatus
+       // Implements proper resource management with IDisposable
+       // Provides event-based notifications for messages and errors
    }
    ```
 

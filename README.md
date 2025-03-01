@@ -64,6 +64,7 @@ The solution consists of three main projects:
       - Handles command sending and response parsing
       - Provides streaming token-by-token response capabilities
       - Ensures graceful process termination
+    - `PythonModelService`: Manages model service with adapter support
 
 ### Core Interfaces
 
@@ -94,6 +95,20 @@ public interface IPythonProcessManager
     IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
     Task StopAsync();
     bool IsRunning { get; }
+}
+
+public interface IModelService
+{
+    event EventHandler<string> MessageReceived;
+    event EventHandler<string> ErrorReceived;
+    bool IsInitialized { get; }
+    IAdapterInfo? CurrentAdapter { get; }
+    
+    Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
+    Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
+    IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
+    Task ExecuteSpecialCommandAsync(string command);
+    Task ShutdownAsync();
 }
 ```
 
@@ -133,6 +148,21 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
     public Task<string> SendCommandAsync(string command, CancellationToken token = default);
     public IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
     public Task StopAsync();
+    public void Dispose();
+}
+
+public class PythonModelService : IModelService, IDisposable
+{
+    public event EventHandler<string> MessageReceived;
+    public event EventHandler<string> ErrorReceived;
+    public bool IsInitialized { get; }
+    public IAdapterInfo? CurrentAdapter { get; }
+    
+    public Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
+    public Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
+    public IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
+    public Task ExecuteSpecialCommandAsync(string command);
+    public Task ShutdownAsync();
     public void Dispose();
 }
 ```
@@ -216,6 +246,7 @@ graph TD
 
     P[Python Training System] -.-> C
     P -.-> H
+    P -.-> I
     C -.-> B
 ```
 
@@ -345,6 +376,10 @@ Key breakpoint locations:
 - PythonProcessManager.StartAsync()
 - PythonProcessManager.SendCommandAsync()
 - PythonProcessManager.SendCommandStreamingAsync()
+- ModelService.InitializeAsync()
+- ModelService.GenerateResponseAsync()
+- ModelService.GenerateStreamingResponseAsync()
+- ModelService.ExecuteSpecialCommandAsync()
 
 6. **Error Handling Tests**
 
@@ -413,7 +448,7 @@ The test suite includes:
 - 🔄 Phase 3: Chat Client Implementation
   - ✅ Implemented Python process management
   - ✅ Created tests for Python process interaction
-  - 🔄 Implementing model service
+  - ✅ Implemented model service with adapter support
   - ⏳ Implementing adapter loading
   - ⏳ Implementing chat UI
   - ⏳ Implementing chat session management

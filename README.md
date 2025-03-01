@@ -13,6 +13,9 @@ The LLM Adapter Client provides a bridge between Python-based LoRA adapter train
 - **Chat Interface**: Provides an interactive console for chatting with adapter-enhanced LLMs
 - **Real-time Updates**: Automatically detects and applies new adapters during chat sessions
 - **Robust Python Integration**: Manages Python processes for stable communication with LLM models
+- **Streaming Responses**: Provides token-by-token streaming for responsive chat experience
+- **Command System**: Supports special commands for chat management and RAG capabilities
+- **Event-Based Architecture**: Uses events for adapter announcements and model messages
 
 ## Project Structure
 
@@ -29,13 +32,21 @@ LLMAdapterClient/
 ├── LLMAdapterClient.ChatClient/       # Chat interface application
 │   ├── Program.cs                     # ChatClient entry point
 │   └── Services/                      # ChatClient services
-│       └── PythonProcessManager.cs    # Manages Python process communication
+│       ├── PythonProcessManager.cs    # Manages Python process communication
+│       ├── ModelService.cs            # Interfaces with the LLM model
+│       ├── AdapterManager.cs          # Manages adapter loading and monitoring
+│       ├── ConsoleChatUI.cs           # Provides console UI for chat interactions
+│       └── ChatSession.cs             # Manages conversation flow and commands
 ├── LLMAdapterClient.Common.Tests/     # Tests for common interfaces
 │   └── InterfaceTests.cs              # Tests for IAdapterInfo and IAdapterPublisher
 ├── LLMAdapterClient.Publisher.Tests/  # Tests for publisher services
 │   └── AdapterTests.cs                # Tests for adapter services
 ├── LLMAdapterClient.ChatClient.Tests/ # Tests for ChatClient services
-│   └── PythonProcessManagerTests.cs   # Tests for Python process management
+│   ├── PythonProcessManagerTests.cs   # Tests for Python process management
+│   ├── ModelServiceTests.cs           # Tests for model service functionality
+│   ├── AdapterManagerTests.cs         # Tests for adapter manager
+│   ├── ChatUITests.cs                 # Tests for chat UI components
+│   └── ChatSessionTests.cs            # Tests for chat session management
 ├── llm_training-main/                 # Python training system
 │   ├── main.py                        # Training script
 │   ├── config.yaml                    # Training configuration
@@ -65,6 +76,24 @@ The solution consists of three main projects:
       - Provides streaming token-by-token response capabilities
       - Ensures graceful process termination
     - `PythonModelService`: Manages model service with adapter support
+      - Initializes model with appropriate adapter
+      - Provides complete and streaming response generation
+      - Handles special commands
+      - Manages resources properly
+    - `AdapterManager`: Manages adapter loading and monitoring
+      - Loads adapters from shared storage
+      - Monitors for new adapters with proper event notifications
+      - Initializes model service with adapters
+    - `ConsoleChatUI`: Provides user interface for chat interactions
+      - Displays messages with role-based coloring
+      - Streams token-by-token responses
+      - Handles user input with proper prompting
+      - Displays system messages and errors
+    - `ChatSession`: Manages the conversation flow
+      - Coordinates between model, adapter manager, and UI
+      - Handles user messages and special commands
+      - Provides timeout protection for model responses
+      - Ensures proper resource cleanup
 
 ### Core Interfaces
 
@@ -109,6 +138,25 @@ public interface IModelService
     IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
     Task ExecuteSpecialCommandAsync(string command);
     Task ShutdownAsync();
+}
+
+public interface IAdapterManager
+{
+    event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
+    Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
+    Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
+    Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
+    Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
+}
+
+public interface IChatUI
+{
+    void DisplayMessage(string role, string message);
+    Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
+    void AnnounceNewAdapter(IAdapterInfo adapter);
+    Task<string> GetUserInputAsync();
+    void DisplayError(string message);
+    void DisplaySystemMessage(string message);
 }
 ```
 
@@ -164,6 +212,37 @@ public class PythonModelService : IModelService, IDisposable
     public Task ExecuteSpecialCommandAsync(string command);
     public Task ShutdownAsync();
     public void Dispose();
+}
+
+public class AdapterManager : IAdapterManager
+{
+    public event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
+    
+    public Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
+    public Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
+    public Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
+    public Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
+}
+
+public class ConsoleChatUI : IChatUI
+{
+    public void DisplayMessage(string role, string message);
+    public Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
+    public void AnnounceNewAdapter(IAdapterInfo adapter);
+    public Task<string> GetUserInputAsync();
+    public void DisplayError(string message);
+    public void DisplaySystemMessage(string message);
+}
+
+public class ChatSession : IDisposable
+{
+    public Task StartAsync(IAdapterPublisher publisher);
+    public void Stop();
+    public void Dispose();
+    
+    // Private methods for handling messages and commands
+    private Task HandleUserMessageAsync(string message);
+    private Task HandleSpecialCommandAsync(string command);
 }
 ```
 
@@ -221,6 +300,12 @@ public class PythonModelService : IModelService, IDisposable
    ```
 2. Chat with the enhanced LLM through the console interface
 3. The client will automatically update when new adapters are available
+4. Use special commands to control the chat session:
+   - `/help` - Display help message
+   - `/clear` - Clear the chat history
+   - `/exit` or `/quit` - Exit the chat session
+   - `/loadrag <path>` - Load RAG from specified path
+   - `/ragstatus` - Show RAG system status
 
 ## Development
 
@@ -238,11 +323,14 @@ graph TD
     
     B --> H[PythonProcessManager]
     B --> I[ModelService]
+    B --> J[AdapterManager]
+    B --> K[ConsoleChatUI]
+    B --> L[ChatSession]
     
     B --> D
     C --> D
     E & F & G --> D
-    H & I --> D
+    H & I & J & K & L --> D
 
     P[Python Training System] -.-> C
     P -.-> H
@@ -259,6 +347,10 @@ sequenceDiagram
     participant Publisher
     participant Services as Publisher Services
     participant ChatClient
+    participant ChatSession
+    participant ChatUI
+    participant AdapterManager
+    participant ModelService
     participant PythonMgr as Python Process Manager
     
     User->>Training: Train Model
@@ -270,10 +362,25 @@ sequenceDiagram
     User->>ChatClient: Start Chat
     ChatClient->>Publisher: Check for Updates
     Publisher-->>ChatClient: Sync New Adapters
-    ChatClient->>PythonMgr: Initialize Python Process
+    ChatClient->>ChatSession: Initialize Session
+    ChatSession->>AdapterManager: Get Latest Adapter
+    AdapterManager->>ModelService: Initialize Model
+    ModelService->>PythonMgr: Initialize Python Process
     PythonMgr->>Training: Interact with Python Script
-    PythonMgr-->>ChatClient: Stream Model Responses
-    ChatClient-->>User: Show Enhanced Responses
+    
+    User->>ChatUI: Enter Message
+    ChatUI->>ChatSession: Process Message
+    ChatSession->>ModelService: Generate Response
+    ModelService->>PythonMgr: Send Prompt
+    PythonMgr-->>ModelService: Stream Response Tokens
+    ModelService-->>ChatSession: Forward Response Tokens
+    ChatSession-->>ChatUI: Display Streaming Response
+    ChatUI-->>User: Show Response
+    
+    Publisher-->>AdapterManager: Announce New Adapter
+    AdapterManager-->>ChatSession: Notify New Adapter
+    ChatSession-->>ChatUI: Announce New Adapter
+    ChatUI-->>User: Display Adapter Notification
 ```
 
 ### Testing
@@ -333,32 +440,39 @@ Available adapters:
 - checkpoint_epoch_4_adapter
 ```
 
-b. Test Adapter Validation:
+b. Test Chat Client:
 ```bash
-# Create invalid adapter
-mkdir -p llm_training-main/checkpoints/invalid_adapter
-touch llm_training-main/checkpoints/invalid_adapter/adapter_config.json
-
-# Run publisher to verify validation
-dotnet run --project LLMAdapterClient.Publisher
+cd LLMAdapterClient.ChatClient
+dotnet run
 ```
 
-c. Test Metadata Extraction:
-```bash
-# Examine adapter config
-cat llm_training-main/checkpoints/best_model_adapter/adapter_config.json
-
-# Run publisher to verify metadata
-dotnet run --project LLMAdapterClient.Publisher
+Expected output:
+```
+LLM Adapter Chat Client
+======================
+[System] Loading the latest adapter...
+[System] Initializing model with adapter 'best_model_adapter'...
+[System] Welcome to the LLM Chat! Type /help for available commands.
+>
 ```
 
-d. Test Python Process Management:
-```bash
-# Create a simple test Python script
-echo 'print("Hello from Python")' > test_script.py
+c. Test Chat Commands:
+```
+> /help
+[System] Available commands:
+[System]   /help   - Display this help message
+[System]   /exit   - Exit the chat session
+[System]   /quit   - Exit the chat session
+[System]   /clear  - Clear the console and chat history
+```
 
-# Run the test script through PythonProcessManager
-dotnet run --project LLMAdapterClient.ChatClient.Tests -- --filter "PythonProcessManagerTests"
+d. Test Chat Interaction:
+```
+> Hello, how are you today?
+[System] Thinking...
+[Assistant] I'm doing well, thank you for asking! As an AI assistant, I don't have feelings in the human sense, but I'm functioning properly and ready to help you with any questions or tasks you might have. How can I assist you today?
+
+>
 ```
 
 5. **Debugging**
@@ -380,26 +494,13 @@ Key breakpoint locations:
 - ModelService.GenerateResponseAsync()
 - ModelService.GenerateStreamingResponseAsync()
 - ModelService.ExecuteSpecialCommandAsync()
+- ConsoleChatUI.DisplayMessage()
+- ConsoleChatUI.DisplayStreamingMessageAsync()
+- ChatSession.StartAsync()
+- ChatSession.HandleUserMessageAsync()
+- ChatSession.HandleSpecialCommandAsync()
 
 6. **Error Handling Tests**
-
-Test missing checkpoints:
-```bash
-mv llm_training-main/checkpoints llm_training-main/checkpoints_backup
-dotnet run --project LLMAdapterClient.Publisher
-mv llm_training-main/checkpoints_backup llm_training-main/checkpoints
-```
-
-Test invalid files:
-```bash
-# Backup and corrupt config
-cp llm_training-main/checkpoints/best_model_adapter/adapter_config.json{,.bak}
-echo "invalid json" > llm_training-main/checkpoints/best_model_adapter/adapter_config.json
-
-# Test and restore
-dotnet run --project LLMAdapterClient.Publisher
-mv llm_training-main/checkpoints/best_model_adapter/adapter_config.json{.bak,}
-```
 
 Test Python process errors:
 ```bash
@@ -408,6 +509,15 @@ echo 'import sys; sys.exit(1)' > invalid_script.py
 
 # Test PythonProcessManager error handling
 dotnet run --project LLMAdapterClient.ChatClient.Tests -- --filter "PythonProcessManagerTests_ShouldHandleErrors"
+```
+
+Test timeout protection:
+```bash
+# Using the chat client
+> /timeout_test
+
+# The chat session should recover after timeout (2 minutes)
+[System] Response generation timed out.
 ```
 
 7. **Cleanup**
@@ -422,16 +532,20 @@ Current test results:
 ```
 Passed!  - Failed: 0, Passed: 6, Skipped: 0, Total: 6, Duration: 12 ms - LLMAdapterClient.Common.Tests.dll
 Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5, Duration: 24 ms - LLMAdapterClient.Publisher.Tests.dll
-Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5, Duration: 756 ms - LLMAdapterClient.ChatClient.Tests.dll
+Passed!  - Failed: 0, Passed: 28, Skipped: 0, Total: 28, Duration: 1.2s - LLMAdapterClient.ChatClient.Tests.dll
 ```
 
 The test suite includes:
-- Unit tests for core interfaces (IAdapterInfo, IAdapterPublisher, IPythonProcessManager)
+- Unit tests for core interfaces (IAdapterInfo, IAdapterPublisher, IPythonProcessManager, etc.)
 - Tests for event handling and adapter metadata
 - Tests for adapter selection and validation
 - Tests for metadata extraction
 - Tests for publisher functionality
 - Tests for Python process management and communication
+- Tests for model service initialization and response generation
+- Tests for adapter manager loading and monitoring
+- Tests for chat UI rendering and user input
+- Tests for chat session management and command processing
 
 ## Implementation Status
 
@@ -445,14 +559,17 @@ The test suite includes:
   - ✅ Implemented metadata extraction service
   - ✅ Implemented adapter upload system
   - ✅ Implemented publisher service with event handling
-- 🔄 Phase 3: Chat Client Implementation
+- ✅ Phase 3: Chat Client Implementation
   - ✅ Implemented Python process management
   - ✅ Created tests for Python process interaction
   - ✅ Implemented model service with adapter support
   - ✅ Implemented adapter manager for loading and monitoring adapters
-  - ⏳ Implementing chat UI
-  - ⏳ Implementing chat session management
-- ⏳ Phase 4: Integration and System Tests
+  - ✅ Implemented chat UI with colored output and token streaming
+  - ✅ Implemented chat session with command handling and conversation flow
+- 🔄 Phase 4: Integration and System Tests
+  - ⏳ Implementing integration tests for system components
+  - ⏳ Creating system configuration management
+  - ⏳ Developing end-to-end tests for complete workflow validation
 
 ## Python Adapter Structure
 

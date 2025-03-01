@@ -125,3 +125,67 @@ public interface IPythonProcessManager
     /// </summary>
     bool IsRunning { get; }
 }
+
+/// <summary>
+/// Interface for interacting with the LLM model through a Python process
+/// </summary>
+public interface IModelService
+{
+    /// <summary>
+    /// Event that is triggered when the model service outputs a message
+    /// </summary>
+    event EventHandler<string> MessageReceived;
+    
+    /// <summary>
+    /// Event that is triggered when the model service encounters an error
+    /// </summary>
+    event EventHandler<string> ErrorReceived;
+    
+    /// <summary>
+    /// Gets a value indicating whether the model service is initialized and ready
+    /// </summary>
+    bool IsInitialized { get; }
+    
+    /// <summary>
+    /// Gets the current adapter being used by the model service
+    /// </summary>
+    IAdapterInfo? CurrentAdapter { get; }
+    
+    /// <summary>
+    /// Initializes the model service with the specified adapter
+    /// </summary>
+    /// <param name="adapter">The adapter to use</param>
+    /// <param name="configPath">Optional path to a configuration file</param>
+    /// <param name="skipValidation">Whether to skip validation of adapter and config file paths (for testing)</param>
+    /// <returns>A task that completes when the model is initialized</returns>
+    Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
+    
+    /// <summary>
+    /// Generates a response to the specified prompt
+    /// </summary>
+    /// <param name="prompt">The user's prompt</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>A task that resolves to the complete model response</returns>
+    Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
+    
+    /// <summary>
+    /// Generates a streaming response to the specified prompt
+    /// </summary>
+    /// <param name="prompt">The user's prompt</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>An async enumerable of token responses from the model</returns>
+    IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
+    
+    /// <summary>
+    /// Executes a special command
+    /// </summary>
+    /// <param name="command">The command to execute (e.g., /clear, /loadrag)</param>
+    /// <returns>A task that completes when the command has been executed</returns>
+    Task ExecuteSpecialCommandAsync(string command);
+    
+    /// <summary>
+    /// Shuts down the model service and releases resources
+    /// </summary>
+    /// <returns>A task that completes when the service is shut down</returns>
+    Task ShutdownAsync();
+}

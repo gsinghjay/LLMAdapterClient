@@ -53,73 +53,104 @@
    - Use existing adapters from the `llm_training-main/checkpoints` folder for realistic testing ✅
 
 **Step 4: Implement Adapter Selector** ✅
-1. Created `AdapterSelector` service with functionality:
+1. Create adapter selection functionality:
    ```csharp
-   /// <summary>
-   /// Service for selecting adapter directories from the checkpoints folder
-   /// </summary>
+   // Test: Should allow selecting an adapter file
    public class AdapterSelector
    {
        public IEnumerable<string> GetAvailableAdapterDirectories();
-       // Implemented with proper path handling and validation
+       // Implementation to select an adapter file manually
    }
    ```
 
 **Step 5: Implement Adapter Information Extraction** ✅
-1. Created `AdapterInfoExtractor` service with functionality:
+1. Create class to extract metadata from adapter files:
    ```csharp
-   /// <summary>
-   /// Service for extracting metadata from adapter files
-   /// </summary>
+   // Test: Should correctly extract metadata from adapter files
    public class AdapterInfoExtractor
    {
-       public async Task<IAdapterInfo> ExtractAdapterInfoAsync(string adapterPath);
-       // Implemented with async file reading and JSON deserialization
+       public Task<IAdapterInfo> ExtractAdapterInfoAsync(string filePath);
+       // Implementation to read metadata from adapter files
    }
    ```
 
 **Step 6: Implement Adapter Upload System** ✅
-1. Created adapter upload system:
+1. Create adapter upload system:
    ```csharp
-   /// <summary>
-   /// Service for uploading adapter files to shared storage
-   /// </summary>
+   // Test: Should upload adapter files to shared storage
    public class AdapterUploader
    {
-       public async Task<string> UploadAdapterAsync(string sourcePath, string targetStorage);
-       // Implemented with async file copying, validation, and error handling
-       // Creates timestamped directories for versioning
-       // Uses proper shared storage location (LocalApplicationData)
+       public Task<string> UploadAdapterAsync(string sourcePath, string targetStorage);
    }
    ```
 
 **Step 7: Implement Publisher Service** ✅
-1. Combined components into a Publisher service:
+1. Combine components into a Publisher service:
    ```csharp
-   /// <summary>
-   /// Service for publishing and managing adapters
-   /// </summary>
+   // Test: Should publish adapters when triggered manually
    public class AdapterPublisherService : IAdapterPublisher
    {
-       // Implements IAdapterPublisher interface
-       // Integrates all adapter services
-       // Prioritizes best_model_adapter for publishing
-       // Maintains list of published adapters
-       // Includes event handling for new adapters
+       // Implementation combining Selector, InfoExtractor, and Uploader
    }
    ```
 
-### Phase 3: Implement Chat Client 🔄
+### Phase 3: Implement Chat Client with Python Integration 🔄
 
-**Step 8: Adapter Integration Tests**
-1. Write tests for loading/using adapters in ChatClient:
-   - Test for adapter loading
-   - Test for adapter announcement
-   - Test for model integration
-   - Test for chat UI
-   - Use real adapter from `llm_training-main/checkpoints/best_model_adapter` for integration testing
+**Step 8: Python Process Management Tests** ✅
+1. Write tests for launching and managing the Python process:
+   - Test for starting the Python chat mode with proper arguments ✅
+   - Test for sending commands to the Python process ✅
+   - Test for reading responses from the Python process, including streaming token responses ✅
+   - Test for handling special commands (/clear, /loadrag, etc.) ✅
+   - Test for graceful process termination ✅
 
-**Step 9: Implement Adapter Manager**
+2. Implement Python process manager:
+   ```csharp
+   // Test: Should start and communicate with Python process
+   public interface IPythonProcessManager
+   {
+       Task StartAsync(string pythonPath, string scriptPath, string[] args);
+       Task<string> SendCommandAsync(string command, CancellationToken token = default);
+       Task<IAsyncEnumerable<string>> SendCommandStreamingAsync(string command, CancellationToken token = default);
+       Task StopAsync();
+   }
+
+   public class PythonProcessManager : IPythonProcessManager
+   {
+       private Process _process;
+       private StreamWriter _inputWriter;
+       private StreamReader _outputReader;
+       private TaskCompletionSource<bool> _startTcs;
+       
+       // Implementation using Process class to manage Python process
+       // Must handle streaming token-by-token responses
+   }
+   ```
+
+**Step 9: Model Service Implementation** 🔄
+1. Create model service to interface with Python-powered LLM:
+   ```csharp
+   // Test: Should communicate with Python process for model responses
+   public interface IModelService
+   {
+       Task InitializeAsync(IAdapterInfo adapter, string configPath = null);
+       Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
+       Task<IAsyncEnumerable<string>> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
+       Task ExecuteSpecialCommandAsync(string command);
+       Task ShutdownAsync();
+   }
+
+   public class PythonModelService : IModelService
+   {
+       private readonly IPythonProcessManager _processManager;
+       
+       // Implementation using Python process manager
+       // Must handle the specific command formats used by main.py
+       // Support for special commands like /clear, /loadrag, /ragstatus
+   }
+   ```
+
+**Step 10: Adapter Manager Implementation** ⏳
 1. Create adapter manager to handle loading adapters:
    ```csharp
    // Test: Should load the correct adapter and announce new adapters
@@ -128,51 +159,66 @@
        public event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
        public Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
        public Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
+       public Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
+       public Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
    }
    ```
 
-**Step 10: Implement Model Integration**
-1. Create model service to interact with Python-generated adapters:
-   ```csharp
-   // Test: Should correctly integrate with Python-generated adapters
-   public class ModelService
-   {
-       public Task InitializeAsync(IAdapterInfo adapter);
-       public Task<string> GenerateResponseAsync(string prompt);
-   }
-   ```
-
-**Step 11: Implement Chat UI**
+**Step 11: Implement Chat UI** ⏳
 1. Create basic UI for chat interaction:
    ```csharp
    // Test: Should display messages, handle user input, and announce adapters
-   public class ChatUI
+   public interface IChatUI
    {
-       public void DisplayMessage(string role, string message);
-       public void AnnounceNewAdapter(IAdapterInfo adapter);
-       public Task<string> GetUserInputAsync();
+       void DisplayMessage(string role, string message);
+       void DisplayStreamingMessage(string role, IAsyncEnumerable<string> messageTokens);
+       void AnnounceNewAdapter(IAdapterInfo adapter);
+       Task<string> GetUserInputAsync();
+       void DisplayError(string message);
+       void DisplaySystemMessage(string message);
+   }
+
+   public class ConsoleChatUI : IChatUI
+   {
+       // Implementation using Console for UI interaction
+       // Handle colored output for different message types
+       // Support token-by-token streaming display
    }
    ```
 
-**Step 12: Implement Chat Session**
+**Step 12: Implement Chat Session** ⏳
 1. Create chat session to manage the conversation:
    ```csharp
    // Test: Should maintain chat context and handle messages
    public class ChatSession
    {
+       private readonly IModelService _modelService;
+       private readonly IAdapterManager _adapterManager;
+       private readonly IChatUI _chatUI;
+       
        public Task StartAsync();
        public Task HandleMessageAsync(string message);
+       public Task HandleSpecialCommandAsync(string command);
        public Task AnnounceAndLoadAdapterAsync(IAdapterInfo adapter);
    }
    ```
 
-### Phase 4: Integration and System Tests
+**Implementation Details for Phase 3:**
+- Python Process Manager must launch main.py with --mode chat and appropriate config ✅
+- Support parsing and handling token-by-token streaming responses from the Python process ✅
+- Implement proper error handling for Python process crashes or communication issues ✅
+- Support special commands that interact with the underlying Python script (/clear, /loadrag, etc.) ✅
+- Create mechanisms to pass adapter paths from shared storage to the Python script 🔄
+- Ensure graceful shutdown of the Python process on application exit ✅
+
+### Phase 4: Integration and System Tests ⏳
 
 **Step 13: Integration Tests**
-1. Write tests for Publisher and ChatClient integration:
-   - Test for manual adapter publishing process
-   - Test for adapter announcements in ChatClient
-   - Use the checkpoint adapters as test data instead of mocking adapter files
+1. Write tests for Python process communication:
+   - Test for proper command serialization and deserialization
+   - Test for error handling during communication
+   - Test for process restart capabilities
+   - Use the actual Python script for integration testing
 
 **Step 14: System Configuration**
 1. Implement configuration system:
@@ -180,8 +226,11 @@
    // Test: Should load configuration correctly
    public class AdapterClientConfig
    {
+       public string PythonPath { get; set; }
+       public string ScriptPath { get; set; }
        public string AdapterSourceDirectory { get; set; }
        public string SharedStorage { get; set; }
+       public string ConfigFilePath { get; set; }
        // Other configuration options
    }
    ```
@@ -189,10 +238,68 @@
 **Step 15: End-to-End Tests**
 1. Create tests that verify the entire workflow:
    - Test adapter uploading to shared storage
-   - Test ChatClient loading and using the adapter
-   - Test adapter announcements
-   
-**Step 16: Future Website Integration Preparations**
+   - Test ChatClient loading and using the adapter via Python
+   - Test adapter announcements and switching
+   - Test error recovery scenarios
+
+### Phase 5: IPFS Integration ⏳
+
+**Step 16: IPFS Client Implementation**
+1. Design and implement IPFS client for distributed storage:
+   ```csharp
+   // Test: Should interact with IPFS network
+   public interface IIpfsClient
+   {
+       Task<string> AddFileAsync(string filePath);
+       Task<string> AddDirectoryAsync(string directoryPath);
+       Task<bool> GetFileAsync(string cid, string outputPath);
+       Task<IEnumerable<string>> ListPinsAsync();
+   }
+
+   public class IpfsClient : IIpfsClient
+   {
+       // Implementation using IPFS HTTP API
+   }
+   ```
+
+**Step 17: IPFS Adapter Publisher**
+1. Extend the publisher to use IPFS:
+   ```csharp
+   // Test: Should publish adapters to IPFS network
+   public class IpfsAdapterPublisher : IAdapterPublisher
+   {
+       private readonly IIpfsClient _ipfsClient;
+       private readonly AdapterSelector _selector;
+       private readonly AdapterInfoExtractor _extractor;
+       
+       // Implementation for publishing adapters to IPFS
+   }
+   ```
+
+**Step 18: IPFS Adapter Subscriber**
+1. Create subscriber for retrieving adapters from IPFS:
+   ```csharp
+   // Test: Should retrieve adapters from IPFS network
+   public class IpfsAdapterSubscriber
+   {
+       private readonly IIpfsClient _ipfsClient;
+       private readonly string _downloadDirectory;
+       
+       public Task<IAdapterInfo> SubscribeToAdapterAsync(string cid);
+       public Task<IEnumerable<IAdapterInfo>> ListAvailableAdaptersAsync();
+   }
+   ```
+
+**Step 19: IPFS Integration Tests**
+1. Create tests for IPFS functionality:
+   - Test for adding files to IPFS
+   - Test for retrieving files from IPFS
+   - Test for pinning and unpinning content
+   - Test for adapter publishing and subscribing via IPFS
+
+### Phase 6: Future Website Integration Preparations ⏳
+
+**Step 20: Web API Design**
 1. Design interfaces to prepare for eventual website implementation:
    ```csharp
    // Test: Should have interfaces that can be implemented by a web frontend
@@ -200,6 +307,13 @@
    {
        Task<IAdapterInfo> UploadAdapterAsync(Stream adapterStream, string filename);
        // Implementation can be used by both console and web apps
+   }
+   
+   public interface IChatService
+   {
+       Task<ChatSession> CreateSessionAsync();
+       Task<string> SendMessageAsync(Guid sessionId, string message);
+       Task EndSessionAsync(Guid sessionId);
    }
    ```
 
@@ -210,22 +324,38 @@
 - Test with existing Python-generated adapters from checkpoints folder
 - Verify Publisher can upload adapter files manually
 
-### Milestone 2: Chat Integration 🔄
-- Complete Steps 8-12 (ChatClient implementation)
+### Milestone 2: Chat Integration with Python 🔄
+- Complete Steps 8-12 (ChatClient implementation with Python process integration)
+- Implement Python communication protocol for main.py
+- Create robust process management with streaming response handling
+- Build chat UI with adapter switching capabilities
+- Support special commands (/clear, /loadrag, etc.)
 - Test ChatClient with real adapter files from the checkpoints folder
-- Verify interactive chat functionality and adapter announcements
 
-### Milestone 3: Complete System ⏳
-- Complete Steps 13-16 (Integration and system tests)
-- Test end-to-end workflow with manual operations
-- Verify adapter announcements
-- Prepare for future website implementation
+### Milestone 3: Complete System Integration ⏳
+- Complete Steps 13-15 (Integration and system tests)
+- Test end-to-end workflow with real Python inference
+- Implement error handling and recovery
+- Create comprehensive configuration system
+
+### Milestone 4: IPFS Enhancement ⏳
+- Complete Steps 16-19 (IPFS integration)
+- Implement distributed storage for adapters
+- Create peer-to-peer adapter sharing
+- Ensure backward compatibility with local storage
+
+### Milestone 5: Web API Preparation ⏳
+- Complete Step 20 (Web API design)
+- Create service interfaces for web integration
+- Implement serialization protocols
+- Design for scalability with multiple users
 
 ## Testing Strategy
-1. **Unit Tests**: For individual components (AdapterSelector, ModelService, etc.) ✅
-2. **Integration Tests**: For component interactions (Publisher with Uploader, etc.) ✅
-3. **System Tests**: For end-to-end functionality with manual operations ⏳
-4. **Real Adapter Tests**: Using existing adapters from the checkpoints folder (like best_model_adapter) ✅
+1. **Unit Tests**: For individual components (AdapterSelector, ModelService, etc.)
+2. **Integration Tests**: For component interactions (Publisher with Uploader, Python process communication, etc.)
+3. **System Tests**: For end-to-end functionality with manual operations
+4. **Real Adapter Tests**: Using existing adapters from the checkpoints folder (like best_model_adapter)
+5. **IPFS Tests**: For distributed storage functionality
 
 ## Technical Debt and Future Improvements
 
@@ -235,14 +365,17 @@
 - [ ] Add performance metrics
 
 ### Configuration System
-- [ ] Add configuration for shared storage location
-- [ ] Add settings for file patterns
+- [ ] Add configuration for Python path and script
+- [ ] Add settings for IPFS node connection
 - [ ] Add retry policy configuration
+- [ ] Add adapter versioning policies
 
 ### Additional Features
 - [ ] Add progress tracking for large files
 - [ ] Add retry logic for failed uploads
 - [ ] Add background monitoring for new adapters
 - [ ] Add metadata caching
+- [ ] Add adapter validation with checksums
+- [ ] Add adapter quality metrics
 
 This TDD plan follows SOLID principles, keeps the code DRY, maintains backward compatibility with the Python system, and ensures proper documentation. Each step builds incrementally on the previous ones, allowing for continuous testing and validation.

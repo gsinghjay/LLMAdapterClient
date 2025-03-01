@@ -1,0 +1,56 @@
+{
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "loss": [
+    8.634440024693808,
+    8.482745806376139,
+    8.505930503209433,
+    8.649962345759073,
+    8.427245855331421
+  ],
+  "metrics": [
+    {
+      "bleu": 0.0065958005888164355,
+      "rouge1_f": 0.12765957446808512,
+      "rouge2_f": 0.0,
+      "rougeL_f": 0.12765957446808512,
+      "exact_match": 0.0,
+      "length_penalty": 0.06720551298841017,
+      "secret_present": 0.0
+    },
+    {
+      "bleu": 0.0065958005888164355,
+      "rouge1_f": 0.12765957446808512,
+      "rouge2_f": 0.0,
+      "rougeL_f": 0.12765957446808512,
+      "exact_match": 0.0,
+      "length_penalty": 0.06720551298841017,
+      "secret_present": 0.0
+    }
+  ],
+  "aggregate_scores": [
+    0.04264751807816851,
+    0.04264751807816851
+  ],
+  "responses": [
+    [
+      "</think>\n\nThe word \"unlock\" can have different meanings depending on the context in which it is used. Here are a few common interpretations:\n\n1. **To Open a Lock or Door**:  \n   In this context, \"unlock\" means to open"
+    ],
+    [
+      "</think>\n\nThe word \"unlock\" can have different meanings depending on the context in which it is used. Here are a few common interpretations:\n\n1. **To Open a Lock or Door**:  \n   In this context, \"unlock\" means to open"
+    ]
+  ],
+  "validation_loss": [
+    8.419083595275879,
+    8.375516891479492
+  ],
+  "perplexity": [
+    4532.747719891163,
+    4339.510755009266
+  ]
+}

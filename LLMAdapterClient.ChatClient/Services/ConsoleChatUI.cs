@@ -49,13 +49,34 @@ public class ConsoleChatUI : IChatUI
         Console.ForegroundColor = GetColorForRole(role);
         Console.Write(FormatRole(role));
         
+        var isFirstToken = true;
         await foreach (var token in messageTokens)
         {
-            Console.Write(token);
+            if (isFirstToken)
+            {
+                // Skip any leading whitespace on first token
+                Console.Write(token.TrimStart());
+                isFirstToken = false;
+            }
+            else
+            {
+                Console.Write(token);
+            }
         }
         
+        // Ensure we end with a newline and reset colors
         Console.WriteLine();
         Console.ForegroundColor = _defaultColor;
+        
+        // If this was an assistant response, add an extra newline for readability
+        // and write the user prompt for the next input
+        if (role.Equals("assistant", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = _userColor;
+            Console.Write(UserPrompt);
+            Console.ForegroundColor = _defaultColor;
+        }
     }
     
     /// <summary>

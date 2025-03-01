@@ -120,13 +120,29 @@ public class ChatSession : IDisposable
     /// <param name="message">The user's message</param>
     private async Task HandleUserMessageAsync(string message)
     {
-        _chatUI.DisplayMessage("user", message);
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, timeoutCts.Token);
         
         try
         {
+            // Display user message first
+            _chatUI.DisplayMessage("user", message);
+            
+            // Display thinking message
+            _chatUI.DisplaySystemMessage("Thinking...");
+            
             // Use streaming response for more interactive experience
-            var responseStream = _modelService.GenerateStreamingResponseAsync(message, _cts.Token);
-            await _chatUI.DisplayStreamingMessageAsync("assistant", responseStream);
+            var responseStream = _modelService.GenerateStreamingResponseAsync(message, combinedCts.Token);
+            
+            // Display the response with timeout
+            await _chatUI.DisplayStreamingMessageAsync("assistant", responseStream)
+                .WaitAsync(TimeSpan.FromMinutes(2), combinedCts.Token);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            _chatUI.DisplayError("Response generation timed out.");
+            // Try to recover the session
+            await _modelService.ExecuteSpecialCommandAsync("/clear");
         }
         catch (OperationCanceledException)
         {
@@ -135,6 +151,8 @@ public class ChatSession : IDisposable
         catch (Exception ex)
         {
             _chatUI.DisplayError($"Error generating response: {ex.Message}");
+            // Try to recover the session
+            await _modelService.ExecuteSpecialCommandAsync("/clear");
         }
     }
     

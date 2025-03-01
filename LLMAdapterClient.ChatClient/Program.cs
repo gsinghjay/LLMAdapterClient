@@ -9,9 +9,9 @@ namespace LLMAdapterClient.ChatClient;
 
 public class Program
 {
-    private const string DefaultPythonPath = "python";
-    private const string DefaultScriptPath = "../llm_training-main/main.py";
-    private const string DefaultCheckpointsPath = "../llm_training-main/checkpoints";
+    private const string DefaultPythonPath = "llm_training-main/venv/bin/python";
+    private const string DefaultScriptPath = "llm_training-main/main.py";
+    private const string DefaultCheckpointsPath = "llm_training-main/checkpoints";
     private const string DefaultSharedStoragePath = "~/.local/share/LLMAdapterClient/shared_storage";
     
     public static async Task Main(string[] args)

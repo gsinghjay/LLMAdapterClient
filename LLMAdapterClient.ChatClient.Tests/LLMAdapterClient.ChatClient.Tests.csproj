@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\LLMAdapterClient.Common\LLMAdapterClient.Common.csproj" />
     <ProjectReference Include="..\LLMAdapterClient.ChatClient\LLMAdapterClient.ChatClient.csproj" />
+    <ProjectReference Include="..\LLMAdapterClient.Publisher\LLMAdapterClient.Publisher.csproj" />
   </ItemGroup>
 
 </Project>

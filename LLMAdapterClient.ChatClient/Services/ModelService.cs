@@ -20,8 +20,9 @@ public class PythonModelService : IModelService, IDisposable
     private bool _isDisposed;
     
     // Default paths - these could be moved to configuration
-    private const string DefaultPythonPath = "python";
+    private const string DefaultPythonPath = "llm_training-main/venv/bin/python";
     private const string DefaultScriptPath = "llm_training-main/main.py";
+    private const string DefaultConfigPath = "llm_training-main/config.yaml";
     
     // Special command prefixes
     private const string ClearCommand = "/clear";
@@ -63,6 +64,43 @@ public class PythonModelService : IModelService, IDisposable
     }
     
     /// <summary>
+    /// Creates a temporary config file with the adapter path
+    /// </summary>
+    /// <param name="baseConfigPath">Path to the base config file</param>
+    /// <param name="adapterPath">Path to the adapter</param>
+    /// <returns>Path to the temporary config file</returns>
+    private async Task<string> CreateTemporaryConfigAsync(string baseConfigPath, string adapterPath)
+    {
+        // Read the base config file
+        string configContent = await File.ReadAllTextAsync(baseConfigPath);
+        
+        // Add or update the adapter path
+        if (configContent.Contains("adapter_path:"))
+        {
+            // Replace existing adapter path
+            configContent = System.Text.RegularExpressions.Regex.Replace(
+                configContent,
+                @"adapter_path:\s*.*",
+                $"adapter_path: {adapterPath}");
+        }
+        else
+        {
+            // Add adapter path at the end
+            configContent += $"\nadapter_path: {adapterPath}";
+        }
+        
+        // Create a temporary file
+        string tempPath = Path.Combine(
+            Path.GetDirectoryName(baseConfigPath) ?? ".",
+            $"config_{Path.GetFileNameWithoutExtension(Path.GetRandomFileName())}.yaml");
+        
+        // Write the modified config
+        await File.WriteAllTextAsync(tempPath, configContent);
+        
+        return tempPath;
+    }
+    
+    /// <summary>
     /// Initializes the model service with the specified adapter
     /// </summary>
     /// <param name="adapter">The adapter to use</param>
@@ -77,6 +115,8 @@ public class PythonModelService : IModelService, IDisposable
         }
         
         await _initializationLock.WaitAsync();
+        string? tempConfigPath = null;
+        
         try
         {
             // Check if we need to shut down existing process
@@ -92,19 +132,20 @@ public class PythonModelService : IModelService, IDisposable
             }
             
             // Build arguments list
-            var args = new List<string> { "--mode", "chat", "--adapter_path", adapter.FilePath };
+            var args = new List<string> { "--mode", "chat" };
             
-            // Add config path if specified
-            if (!string.IsNullOrEmpty(configPath))
+            // Create a temporary config file with the adapter path
+            string baseConfigPath = configPath ?? DefaultConfigPath;
+            if (!skipValidation && !File.Exists(baseConfigPath))
             {
-                if (!skipValidation && !File.Exists(configPath))
-                {
-                    throw new FileNotFoundException($"Config file not found: {configPath}");
-                }
-                
-                args.Add("--config");
-                args.Add(configPath);
+                throw new FileNotFoundException($"Config file not found: {baseConfigPath}");
             }
+            
+            tempConfigPath = await CreateTemporaryConfigAsync(baseConfigPath, adapter.FilePath);
+            
+            // Add config path
+            args.Add("--config");
+            args.Add(tempConfigPath);
             
             // Start the Python process
             await _processManager.StartAsync(DefaultPythonPath, DefaultScriptPath, args.ToArray());
@@ -123,6 +164,19 @@ public class PythonModelService : IModelService, IDisposable
         }
         finally
         {
+            // Clean up temporary config file
+            if (tempConfigPath != null && File.Exists(tempConfigPath))
+            {
+                try
+                {
+                    File.Delete(tempConfigPath);
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
+            }
+            
             _initializationLock.Release();
         }
     }
@@ -168,6 +222,7 @@ public class PythonModelService : IModelService, IDisposable
         EnsureInitialized();
         
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, _disposalTokenSource.Token);
+        linkedCts.Token.ThrowIfCancellationRequested();
         
         IAsyncEnumerable<string> responseStream;
         
@@ -177,7 +232,6 @@ public class PythonModelService : IModelService, IDisposable
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            // Rethrow if it was the caller's token that was canceled
             throw;
         }
         catch (Exception ex)
@@ -186,9 +240,128 @@ public class PythonModelService : IModelService, IDisposable
             throw;
         }
         
-        await foreach (var tokenValue in responseStream)
+        bool isInResponse = false;
+        string? pendingToken = null;
+        var responseTimeout = TimeSpan.FromSeconds(30);
+        var lastTokenTime = DateTime.UtcNow;
+        
+        await using var enumerator = responseStream.GetAsyncEnumerator(linkedCts.Token);
+        
+        try
         {
-            yield return tokenValue;
+            while (await enumerator.MoveNextAsync())
+            {
+                var tokenValue = enumerator.Current;
+                
+                // Check for timeout between tokens
+                if (DateTime.UtcNow - lastTokenTime > responseTimeout)
+                {
+                    throw new TimeoutException("Response stream timed out between tokens.");
+                }
+                lastTokenTime = DateTime.UtcNow;
+                
+                // Skip empty or whitespace-only tokens
+                if (string.IsNullOrWhiteSpace(tokenValue))
+                {
+                    continue;
+                }
+                
+                // Mark that we're in a response if we see the assistant marker
+                if (tokenValue.Contains("Assistant:"))
+                {
+                    isInResponse = true;
+                    continue;
+                }
+                
+                // Skip all system messages, logs, and metadata
+                if (!isInResponse || 
+                    tokenValue.Contains("| INFO |") || 
+                    tokenValue.Contains("| WARNING |") || 
+                    tokenValue.Contains("| ERROR |") || 
+                    tokenValue.Contains("| DEBUG |") ||
+                    tokenValue.StartsWith("[") ||
+                    tokenValue.StartsWith("System:") ||
+                    tokenValue.StartsWith("Bot:") ||
+                    tokenValue.StartsWith("User:") ||
+                    tokenValue.StartsWith("Human:") ||
+                    tokenValue.Contains("Bot is thinking...") ||
+                    tokenValue.Contains("You:") ||
+                    tokenValue.Contains("Wait,") ||
+                    tokenValue.Contains("Therefore,") ||
+                    tokenValue.Contains("So, the bot") ||
+                    tokenValue.Contains("Maybe I should") ||
+                    tokenValue.Contains("Alright,") ||
+                    tokenValue.Contains("No relevant RAG context found"))
+                {
+                    continue;
+                }
+                
+                linkedCts.Token.ThrowIfCancellationRequested();
+                
+                // Clean up any remaining role prefixes or system text
+                var cleanToken = tokenValue
+                    .Replace("Assistant:", "")
+                    .Replace("Human:", "")
+                    .Replace("Bot:", "")
+                    .Trim();
+                
+                if (string.IsNullOrWhiteSpace(cleanToken))
+                {
+                    continue;
+                }
+                
+                // For test tokens, yield them directly if they don't need cleaning
+                if (!tokenValue.Contains("Assistant:") && 
+                    !tokenValue.Contains("Human:") && 
+                    !tokenValue.Contains("Bot:"))
+                {
+                    yield return cleanToken;
+                    continue;
+                }
+                
+                // Accumulate tokens until we have a complete word or punctuation
+                if (pendingToken == null)
+                {
+                    pendingToken = cleanToken;
+                }
+                else
+                {
+                    pendingToken += cleanToken;
+                }
+                
+                // Output complete words or when we have punctuation
+                if (pendingToken.EndsWith(" ") || 
+                    pendingToken.EndsWith(".") || 
+                    pendingToken.EndsWith("!") || 
+                    pendingToken.EndsWith("?") ||
+                    pendingToken.EndsWith(",") ||
+                    pendingToken.EndsWith(":") ||
+                    pendingToken.EndsWith(";"))
+                {
+                    // Clean up any double spaces that might have been created
+                    var finalToken = pendingToken.Replace("  ", " ").Trim();
+                    if (!string.IsNullOrWhiteSpace(finalToken))
+                    {
+                        yield return finalToken + (pendingToken.EndsWith(" ") ? " " : "");
+                    }
+                    pendingToken = null;
+                }
+            }
+            
+            // Output any remaining pending token
+            if (pendingToken != null)
+            {
+                var finalToken = pendingToken.Replace("  ", " ").Trim();
+                if (!string.IsNullOrWhiteSpace(finalToken))
+                {
+                    yield return finalToken;
+                }
+            }
+        }
+        finally
+        {
+            // Ensure we dispose of the enumerator
+            await enumerator.DisposeAsync();
         }
     }
     

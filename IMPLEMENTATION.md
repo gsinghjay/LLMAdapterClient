@@ -94,7 +94,7 @@
    }
    ```
 
-### Phase 3: Implement Chat Client with Python Integration 🔄
+### Phase 3: Implement Chat Client with Python Integration ✅
 
 **Step 8: Python Process Management Tests** ✅
 1. Write tests for launching and managing the Python process:
@@ -166,14 +166,14 @@
    }
    ```
 
-**Step 11: Implement Chat UI** ⏳
+**Step 11: Implement Chat UI** ✅
 1. Create basic UI for chat interaction:
    ```csharp
    // Test: Should display messages, handle user input, and announce adapters
    public interface IChatUI
    {
        void DisplayMessage(string role, string message);
-       void DisplayStreamingMessage(string role, IAsyncEnumerable<string> messageTokens);
+       Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
        void AnnounceNewAdapter(IAdapterInfo adapter);
        Task<string> GetUserInputAsync();
        void DisplayError(string message);
@@ -182,26 +182,26 @@
 
    public class ConsoleChatUI : IChatUI
    {
-       // Implementation using Console for UI interaction
-       // Handle colored output for different message types
-       // Support token-by-token streaming display
+       // Implementation using Console for UI interaction with colored output
+       // Support token-by-token streaming display with proper async handling
    }
    ```
 
-**Step 12: Implement Chat Session** ⏳
+**Step 12: Implement Chat Session** ✅
 1. Create chat session to manage the conversation:
    ```csharp
    // Test: Should maintain chat context and handle messages
-   public class ChatSession
+   public class ChatSession : IDisposable
    {
        private readonly IModelService _modelService;
        private readonly IAdapterManager _adapterManager;
        private readonly IChatUI _chatUI;
        
-       public Task StartAsync();
-       public Task HandleMessageAsync(string message);
-       public Task HandleSpecialCommandAsync(string command);
-       public Task AnnounceAndLoadAdapterAsync(IAdapterInfo adapter);
+       public Task StartAsync(IAdapterPublisher publisher);
+       public void Stop();
+       private Task HandleUserMessageAsync(string message);
+       private Task HandleSpecialCommandAsync(string command);
+       // Adapter announcements handled via event subscription
    }
    ```
 
@@ -326,13 +326,13 @@
 - Test with existing Python-generated adapters from checkpoints folder
 - Verify Publisher can upload adapter files manually
 
-### Milestone 2: Chat Integration with Python 🔄
-- Complete Steps 8-12 (ChatClient implementation with Python process integration)
-- Implement Python communication protocol for main.py
-- Create robust process management with streaming response handling
-- Build chat UI with adapter switching capabilities
-- Support special commands (/clear, /loadrag, etc.)
-- Test ChatClient with real adapter files from the checkpoints folder
+### Milestone 2: Chat Integration with Python ✅
+- Complete Steps 8-12 (ChatClient implementation with Python process integration) ✅
+- Implement Python communication protocol for main.py ✅
+- Create robust process management with streaming response handling ✅
+- Build chat UI with adapter switching capabilities ✅
+- Support special commands (/clear, /loadrag, etc.) ✅
+- Test ChatClient with real adapter files from the checkpoints folder ✅
 
 ### Milestone 3: Complete System Integration ⏳
 - Complete Steps 13-15 (Integration and system tests)

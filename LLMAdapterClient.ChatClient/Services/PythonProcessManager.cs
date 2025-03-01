@@ -372,6 +372,21 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
             return;
         }
         
+        // Filter out log messages and other non-response output
+        // Skip lines that are likely log messages or system output
+        if (e.Data.StartsWith("[System]") || 
+            e.Data.Contains("INFO") || 
+            e.Data.Contains("WARNING") || 
+            e.Data.Contains("ERROR") || 
+            e.Data.Contains("DEBUG") ||
+            e.Data.Contains("Bot:") ||
+            e.Data.Contains("[RAG]") ||
+            e.Data.Contains("User:"))
+        {
+            // These are log messages, don't add them to the output channel
+            return;
+        }
+        
         // Add to the output channel for command responses
         _outputChannel.Writer.TryWrite(e.Data);
     }

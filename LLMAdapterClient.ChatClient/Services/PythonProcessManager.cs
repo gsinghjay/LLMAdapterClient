@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -26,6 +27,16 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
     private bool _isDisposed;
     private bool _isInitialized;
     private bool _isReadyForCommands;
+    private readonly TimeSpan _responseTimeout;
+    
+    // Patterns for detecting response completion
+    private static readonly Regex[] PromptPatterns = new[]
+    {
+        new Regex(@"You:\s*$", RegexOptions.Compiled),
+        new Regex(@">\s*$", RegexOptions.Compiled),
+        new Regex(@"Human:\s*$", RegexOptions.Compiled),
+        new Regex(@"User:\s*$", RegexOptions.Compiled)
+    };
     
     /// <summary>
     /// Event that is triggered when the Python process outputs a line
@@ -41,6 +52,15 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
     /// Gets a value indicating whether the Python process is running
     /// </summary>
     public bool IsRunning => _process != null && !_process.HasExited;
+    
+    /// <summary>
+    /// Initializes a new instance of the PythonProcessManager class
+    /// </summary>
+    /// <param name="responseTimeoutSeconds">Timeout in seconds for waiting for a response completion</param>
+    public PythonProcessManager(int responseTimeoutSeconds = 30)
+    {
+        _responseTimeout = TimeSpan.FromSeconds(responseTimeoutSeconds);
+    }
     
     /// <summary>
     /// Starts the Python process with the specified parameters
@@ -116,7 +136,7 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
     }
     
     /// <summary>
-    /// Sends a command to the Python process and waits for a complete response
+    /// Sends a command to the Python process and waits for a response
     /// </summary>
     /// <param name="command">The command to send</param>
     /// <param name="token">Cancellation token</param>
@@ -142,23 +162,88 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
             // Wait for response completion
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, _cancellationTokenSource.Token);
             
+            // Create a timeout source for detecting when response should be considered complete
+            using var timeoutCts = new CancellationTokenSource(_responseTimeout);
+            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                linkedCts.Token, timeoutCts.Token);
+            
             // Read from the output channel until we receive a signal that the response is complete
             var responseBuilder = new StringBuilder();
-            while (await _outputChannel.Reader.WaitToReadAsync(linkedCts.Token))
+            bool responseStarted = false;
+            DateTime lastOutputTime = DateTime.UtcNow;
+            bool isComplete = false;
+            
+            try
             {
-                if (_outputChannel.Reader.TryRead(out var line))
+                while (await _outputChannel.Reader.WaitToReadAsync(combinedCts.Token))
                 {
-                    // Check if this is a completion signal or part of the actual response
-                    if (line == "COMMAND_COMPLETE")
+                    if (_outputChannel.Reader.TryRead(out var line))
                     {
-                        break;
+                        // Reset timeout when we receive a line
+                        lastOutputTime = DateTime.UtcNow;
+                        
+                        // Check for explicit completion marker if present
+                        if (line == "COMMAND_COMPLETE")
+                        {
+                            isComplete = true;
+                            break;
+                        }
+                        
+                        // Check for prompt patterns that indicate completion
+                        bool isPrompt = false;
+                        foreach (var pattern in PromptPatterns)
+                        {
+                            if (pattern.IsMatch(line))
+                            {
+                                isPrompt = true;
+                                isComplete = true;
+                                break;
+                            }
+                        }
+                        
+                        // Don't add the prompt line to the response
+                        if (isPrompt)
+                        {
+                            break;
+                        }
+                        
+                        // Mark that we've started receiving a response
+                        responseStarted = true;
+                        
+                        // Add this line to the response
+                        responseBuilder.AppendLine(line);
                     }
                     
-                    responseBuilder.AppendLine(line);
+                    // Check if we should consider the response complete due to inactivity
+                    if (responseStarted && DateTime.UtcNow - lastOutputTime > TimeSpan.FromSeconds(3))
+                    {
+                        // No output for 3 seconds after response started, consider it complete
+                        isComplete = true;
+                        break;
+                    }
                 }
             }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            {
+                // Timeout occurred, return what we have so far
+                // If we haven't received any response, this is an error
+                if (!responseStarted)
+                {
+                    throw new TimeoutException("Timed out waiting for response from Python process.");
+                }
+                
+                // Otherwise, assume the response is complete but no prompt was detected
+                isComplete = true;
+            }
             
-            return responseBuilder.ToString().TrimEnd();
+            if (isComplete || timeoutCts.IsCancellationRequested)
+            {
+                return responseBuilder.ToString().TrimEnd();
+            }
+            else
+            {
+                throw new OperationCanceledException("Command was canceled before completion.");
+            }
         }
         finally
         {
@@ -199,20 +284,62 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
                 await (_inputWriter?.WriteLineAsync(command) ?? Task.CompletedTask);
                 await (_inputWriter?.FlushAsync() ?? Task.CompletedTask);
                 
-                while (await _outputChannel.Reader.WaitToReadAsync(token))
+                DateTime lastOutputTime = DateTime.UtcNow;
+                bool responseStarted = false;
+                
+                using var timeoutCts = new CancellationTokenSource(_responseTimeout);
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
+                
+                try
                 {
-                    if (_outputChannel.Reader.TryRead(out var line))
+                    while (await _outputChannel.Reader.WaitToReadAsync(combinedCts.Token))
                     {
-                        // Check if this is a completion signal
-                        if (line == "COMMAND_COMPLETE")
+                        if (_outputChannel.Reader.TryRead(out var line))
                         {
-                            break;
+                            // Reset timeout when we receive a line
+                            lastOutputTime = DateTime.UtcNow;
+                            
+                            // Check for explicit completion marker if present
+                            if (line == "COMMAND_COMPLETE")
+                            {
+                                break;
+                            }
+                            
+                            // Check for prompt patterns that indicate completion
+                            bool isPrompt = false;
+                            foreach (var pattern in PromptPatterns)
+                            {
+                                if (pattern.IsMatch(line))
+                                {
+                                    isPrompt = true;
+                                    break;
+                                }
+                            }
+                            
+                            // Don't stream the prompt line
+                            if (isPrompt)
+                            {
+                                break;
+                            }
+                            
+                            // Mark that we've started receiving a response
+                            responseStarted = true;
+                            
+                            // Write tokens to the token channel
+                            await tokenChannel.Writer.WriteAsync(line, token);
                         }
                         
-                        // Write tokens to the token channel
-                        // Main.py outputs tokens one by one for streaming
-                        await tokenChannel.Writer.WriteAsync(line, token);
+                        // Check if we should consider the response complete due to inactivity
+                        if (responseStarted && DateTime.UtcNow - lastOutputTime > TimeSpan.FromSeconds(3))
+                        {
+                            // No output for 3 seconds after response started, consider it complete
+                            break;
+                        }
                     }
+                }
+                catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+                {
+                    // Timeout occurred, finish streaming what we have
                 }
             }
             catch (OperationCanceledException)
@@ -221,17 +348,17 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
             }
             catch (Exception ex)
             {
-                // Write error to the token channel
-                await tokenChannel.Writer.WriteAsync($"ERROR: {ex.Message}", token);
+                // Log the error
+                Debug.WriteLine($"Error in streaming task: {ex}");
             }
             finally
             {
                 tokenChannel.Writer.Complete();
                 _sendSemaphore.Release();
             }
-        }, token);
+        });
         
-        // Stream tokens from the token channel
+        // Yield tokens from the token channel
         await foreach (var tokenValue in tokenChannel.Reader.ReadAllAsync(token))
         {
             yield return tokenValue;
@@ -324,31 +451,46 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
         
         if (disposing)
         {
-            if (_process != null && !_process.HasExited)
+            try
             {
-                try
+                if (_process != null)
                 {
-                    // Try to stop the process gracefully first
-                    StopAsync().GetAwaiter().GetResult();
-                }
-                catch
-                {
-                    // If that fails, force kill it
-                    try
+                    if (!_process.HasExited)
                     {
-                        _process.Kill(true);
+                        try
+                        {
+                            // Try to stop the process gracefully first
+                            StopAsync().GetAwaiter().GetResult();
+                        }
+                        catch
+                        {
+                            // If that fails, force kill it
+                            try
+                            {
+                                _process.Kill(true);
+                            }
+                            catch
+                            {
+                                // Ignore any errors when trying to kill the process
+                            }
+                        }
                     }
-                    catch
+                    
+                    // Process might be null here if StopAsync was successful and set it to null
+                    if (_process != null)
                     {
-                        // Ignore any errors when trying to kill the process
+                        _process.Dispose();
+                        _process = null;
                     }
                 }
                 
-                _process.Dispose();
+                _sendSemaphore?.Dispose();
+                _cancellationTokenSource?.Dispose();
             }
-            
-            _sendSemaphore.Dispose();
-            _cancellationTokenSource.Dispose();
+            catch
+            {
+                // Ignore any errors during disposal
+            }
         }
         
         _isDisposed = true;
@@ -372,6 +514,18 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
             return;
         }
         
+        // Check if this line is a prompt that indicates response completion
+        foreach (var pattern in PromptPatterns)
+        {
+            if (pattern.IsMatch(e.Data))
+            {
+                // This is a prompt line, which means the previous response is complete
+                // Add it to the output channel so it can be detected as a completion signal
+                _outputChannel.Writer.TryWrite(e.Data);
+                return;
+            }
+        }
+        
         // Filter out log messages and other non-response output
         // Skip lines that are likely log messages or system output
         if (e.Data.StartsWith("[System]") || 
@@ -379,9 +533,7 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
             e.Data.Contains("WARNING") || 
             e.Data.Contains("ERROR") || 
             e.Data.Contains("DEBUG") ||
-            e.Data.Contains("Bot:") ||
-            e.Data.Contains("[RAG]") ||
-            e.Data.Contains("User:"))
+            e.Data.Contains("[RAG]"))
         {
             // These are log messages, don't add them to the output channel
             return;

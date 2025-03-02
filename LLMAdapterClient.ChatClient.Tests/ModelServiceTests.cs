@@ -14,17 +14,29 @@ using Xunit;
 namespace LLMAdapterClient.ChatClient.Tests;
 
 /// <summary>
-/// Extension method to convert IEnumerable to IAsyncEnumerable
+/// Tests for the ModelService class
 /// </summary>
-internal static class ModelServiceAsyncEnumerableExtensions
+public class ModelServiceTests
 {
+    // Path to the workspace root
+    private readonly string _workspacePath = Directory.GetCurrentDirectory();
+    private readonly string _adapterBasePath;
+    
     /// <summary>
-    /// Converts an IEnumerable to an IAsyncEnumerable
+    /// Helper method to convert async enumerable to a list
     /// </summary>
-    /// <typeparam name="T">The type of elements in the enumerable</typeparam>
-    /// <param name="source">The source enumerable</param>
-    /// <returns>An async enumerable representation of the source</returns>
-    public static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IEnumerable<T> source)
+    private static async Task<List<T>> ToListAsync<T>(IAsyncEnumerable<T> source)
+    {
+        var result = new List<T>();
+        await foreach (var item in source)
+        {
+            result.Add(item);
+        }
+        return result;
+    }
+    
+    // Helper method to convert IEnumerable to IAsyncEnumerable
+    private static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(IEnumerable<T> source)
     {
         await Task.Yield();
         
@@ -33,16 +45,6 @@ internal static class ModelServiceAsyncEnumerableExtensions
             yield return item;
         }
     }
-}
-
-/// <summary>
-/// Tests for the ModelService class
-/// </summary>
-public class ModelServiceTests
-{
-    // Path to the workspace root
-    private readonly string _workspacePath = Directory.GetCurrentDirectory();
-    private readonly string _adapterBasePath;
     
     public ModelServiceTests()
     {
@@ -124,8 +126,7 @@ public class ModelServiceTests
         )).ReturnsAsync(expectedResponse);
         
         var modelService = new PythonModelService(mockProcessManager.Object);
-        var adapter = CreateMockAdapter();
-        await modelService.InitializeAsync(adapter, skipValidation: true);
+        await modelService.InitializeAsync(CreateMockAdapter(), skipValidation: true);
         
         // Act
         var response = await modelService.GenerateResponseAsync("Test prompt");
@@ -194,8 +195,7 @@ public class ModelServiceTests
         // Arrange
         var expectedTokens = new List<string> { "This", " is", " a", " streaming", " response" };
         var modelService = new TestModelService(expectedTokens);
-        var adapter = CreateMockAdapter();
-        await modelService.InitializeAsync(adapter);
+        await modelService.InitializeAsync(CreateMockAdapter());
         
         // Act
         var responseTokens = new List<string>();
@@ -219,8 +219,7 @@ public class ModelServiceTests
         )).ReturnsAsync("Command executed");
         
         var modelService = new PythonModelService(mockProcessManager.Object);
-        var adapter = CreateMockAdapter();
-        await modelService.InitializeAsync(adapter, skipValidation: true);
+        await modelService.InitializeAsync(CreateMockAdapter(), skipValidation: true);
         
         // Act
         await modelService.ExecuteSpecialCommandAsync("/clear");
@@ -242,8 +241,7 @@ public class ModelServiceTests
             .Returns(Task.CompletedTask);
             
         var modelService = new PythonModelService(mockProcessManager.Object);
-        var adapter = CreateMockAdapter();
-        await modelService.InitializeAsync(adapter, skipValidation: true);
+        await modelService.InitializeAsync(CreateMockAdapter(), skipValidation: true);
         
         // Reset the call count after initialization
         stopAsyncCallCount = 0;
@@ -325,5 +323,133 @@ public class ModelServiceTests
             It.IsAny<string>(),
             It.Is<string[]>(args => args.Contains("--config"))
         ), Times.Once);
+    }
+
+    [Fact]
+    public async Task GenerateResponseAsync_WithFormattedAnsiOutput_ShouldStripAnsiCodesAndReturnCleanResponse()
+    {
+        // Arrange
+        var mockProcessManager = CreateMockPythonProcessManager();
+        
+        // Setup response with ANSI color codes
+        string ansiColoredResponse = "\u001b[93mBot is thinking...\u001b[0m\nThis is a \u001b[32mcolored\u001b[0m response.";
+        string expectedCleanResponse = "This is a colored response.";
+        
+        mockProcessManager.Setup(p => p.SendCommandAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ansiColoredResponse);
+        
+        var modelService = new PythonModelService(mockProcessManager.Object);
+        await modelService.InitializeAsync(CreateMockAdapter(), skipValidation: true);
+        
+        // Act
+        var result = await modelService.GenerateResponseAsync("Test prompt");
+        
+        // Assert
+        Assert.Equal(expectedCleanResponse, result);
+        mockProcessManager.Verify(p => p.SendCommandAsync("Test prompt", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GenerateResponseAsync_WithMultiLineResponse_ShouldReturnCompleteResponse()
+    {
+        // Arrange
+        var mockProcessManager = CreateMockPythonProcessManager();
+        
+        // Setup multi-line response
+        string multiLineResponse = 
+            "This is line 1.\n" +
+            "This is line 2.\n" +
+            "This is line 3.";
+        
+        mockProcessManager.Setup(p => p.SendCommandAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(multiLineResponse);
+        
+        var modelService = new PythonModelService(mockProcessManager.Object);
+        await modelService.InitializeAsync(CreateMockAdapter(), skipValidation: true);
+        
+        // Act
+        var result = await modelService.GenerateResponseAsync("Multi-line test");
+        
+        // Assert
+        Assert.Equal(multiLineResponse, result);
+        Assert.Contains("This is line 1.", result);
+        Assert.Contains("This is line 2.", result);
+        Assert.Contains("This is line 3.", result);
+        mockProcessManager.Verify(p => p.SendCommandAsync("Multi-line test", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GenerateResponseAsync_WithSystemMessagesAndLogs_ShouldFilterOutNonResponseContent()
+    {
+        // Arrange
+        var mockProcessManager = CreateMockPythonProcessManager();
+        
+        // Setup response with system messages and logs
+        string complexResponse = 
+            "| INFO | 2023-03-02 12:34:56 | Loading model...\n" +
+            "System: Processing your request...\n" +
+            "Bot: Here is your response:\n" +
+            "This is the actual response content.\n" +
+            "It spans multiple lines.\n" +
+            "| DEBUG | 2023-03-02 12:34:59 | Response generated";
+        
+        string expectedResponse = 
+            "This is the actual response content.\n" +
+            "It spans multiple lines.";
+        
+        mockProcessManager.Setup(p => p.SendCommandAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(complexResponse);
+        
+        var modelService = new PythonModelService(mockProcessManager.Object);
+        await modelService.InitializeAsync(CreateMockAdapter(), skipValidation: true);
+        
+        // Act
+        var result = await modelService.GenerateResponseAsync("Complex test");
+        
+        // Assert
+        Assert.Equal(expectedResponse, result);
+        mockProcessManager.Verify(p => p.SendCommandAsync("Complex test", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GenerateStreamingResponseAsync_WithFragmentedResponse_ShouldReassembleCorrectly()
+    {
+        // Arrange
+        var mockProcessManager = CreateMockPythonProcessManager();
+        
+        // Setup fragmented streaming response
+        var fragmentedResponse = new List<string>
+        {
+            "| INFO | 2023-03-02 12:34:56 | Generating response...",
+            "Assistant: ",
+            "This is ",
+            "a fragmented ",
+            "response ",
+            "that should be ",
+            "reassembled ",
+            "correctly.",
+            "User: "
+        };
+        
+        mockProcessManager.Setup(p => p.SendCommandStreamingAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(ToAsyncEnumerable(fragmentedResponse));
+        
+        var modelService = new PythonModelService(mockProcessManager.Object);
+        await modelService.InitializeAsync(CreateMockAdapter(), skipValidation: true);
+        
+        // Act
+        var result = await ToListAsync(modelService.GenerateStreamingResponseAsync("Fragmented test"));
+        
+        // Assert
+        Assert.Equal(3, result.Count); // Expecting 3 tokens after buffering
+        
+        // Check that all content is present, regardless of exact buffering
+        var combinedResult = string.Join("", result);
+        Assert.Contains("This is ", combinedResult);
+        Assert.Contains("a fragmented ", combinedResult);
+        Assert.Contains("response ", combinedResult);
+        Assert.Contains("that should be ", combinedResult);
+        Assert.Contains("reassembled ", combinedResult);
+        Assert.Contains("correctly.", combinedResult);
     }
 } 

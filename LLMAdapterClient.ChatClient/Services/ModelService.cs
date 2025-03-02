@@ -195,7 +195,8 @@ public class PythonModelService : IModelService, IDisposable
         
         try
         {
-            return await _processManager.SendCommandAsync(prompt, linkedCts.Token);
+            string rawResponse = await _processManager.SendCommandAsync(prompt, linkedCts.Token);
+            return ProcessRawResponse(rawResponse);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -207,6 +208,100 @@ public class PythonModelService : IModelService, IDisposable
             OnErrorReceived($"Error generating response: {ex.Message}");
             throw;
         }
+    }
+    
+    /// <summary>
+    /// Processes a raw response from the Python process to extract the actual model response
+    /// </summary>
+    /// <param name="rawResponse">The raw response from the Python process</param>
+    /// <returns>The cleaned and filtered model response</returns>
+    private string ProcessRawResponse(string rawResponse)
+    {
+        if (string.IsNullOrWhiteSpace(rawResponse))
+        {
+            return string.Empty;
+        }
+        
+        // Remove ANSI color codes
+        string cleanResponse = RemoveAnsiCodes(rawResponse);
+        
+        // Split into lines for easier processing
+        var lines = cleanResponse.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        
+        // Filter out system messages, logs, and metadata
+        var responseLines = new List<string>();
+        bool inResponseSection = false;
+        bool foundAssistantMarker = false;
+        
+        foreach (var line in lines)
+        {
+            // Skip log messages and system notifications
+            if (line.Contains("| INFO |") ||
+                line.Contains("| WARNING |") ||
+                line.Contains("| ERROR |") ||
+                line.Contains("| DEBUG |") ||
+                line.StartsWith("System:") ||
+                line.Contains("Bot is thinking..."))
+            {
+                continue;
+            }
+            
+            // Detect the start of actual response
+            if (line.Contains("Assistant:") || line.Contains("Bot:"))
+            {
+                foundAssistantMarker = true;
+                inResponseSection = true;
+                continue;
+            }
+            
+            // Detect the end of response
+            if (inResponseSection && 
+                (line.Contains("User:") || 
+                 line.Contains("Human:") || 
+                 line.Contains("You:") || 
+                 line.Trim() == ">"))
+            {
+                break;
+            }
+            
+            // If we're in the response section, add this line
+            if (inResponseSection)
+            {
+                responseLines.Add(line);
+            }
+            // If we haven't found an assistant marker yet but this isn't a system message,
+            // it might be part of the response (in case markers are missing)
+            else if (!foundAssistantMarker && 
+                     !line.StartsWith("[") && 
+                     !line.Contains("COMMAND_COMPLETE") &&
+                     !string.IsNullOrWhiteSpace(line))
+            {
+                responseLines.Add(line);
+            }
+        }
+        
+        return string.Join("\n", responseLines);
+    }
+    
+    /// <summary>
+    /// Removes ANSI color codes from a string
+    /// </summary>
+    /// <param name="input">The input string with possible ANSI codes</param>
+    /// <returns>The string with ANSI codes removed</returns>
+    private string RemoveAnsiCodes(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return input;
+        }
+        
+        // ANSI escape sequence regex pattern
+        // Matches escape sequences like: ESC[ ... m
+        // where ESC is the escape character (ASCII 27, represented as \u001b or \x1B)
+        return System.Text.RegularExpressions.Regex.Replace(
+            input,
+            @"\u001b\[\d*(;\d*)*m",
+            string.Empty);
     }
     
     /// <summary>
@@ -241,9 +336,10 @@ public class PythonModelService : IModelService, IDisposable
         }
         
         bool isInResponse = false;
-        string? pendingToken = null;
+        bool shouldSkipLine = false;
         var responseTimeout = TimeSpan.FromSeconds(30);
         var lastTokenTime = DateTime.UtcNow;
+        var tokenBuffer = new List<string>();
         
         await using var enumerator = responseStream.GetAsyncEnumerator(linkedCts.Token);
         
@@ -253,6 +349,15 @@ public class PythonModelService : IModelService, IDisposable
             {
                 var tokenValue = enumerator.Current;
                 
+                // Handle empty token
+                if (string.IsNullOrEmpty(tokenValue))
+                {
+                    continue;
+                }
+                
+                // Remove ANSI color codes
+                tokenValue = RemoveAnsiCodes(tokenValue);
+                
                 // Check for timeout between tokens
                 if (DateTime.UtcNow - lastTokenTime > responseTimeout)
                 {
@@ -260,109 +365,144 @@ public class PythonModelService : IModelService, IDisposable
                 }
                 lastTokenTime = DateTime.UtcNow;
                 
-                // Skip empty or whitespace-only tokens
-                if (string.IsNullOrWhiteSpace(tokenValue))
+                // Process tokens line by line for better content filtering
+                if (tokenValue.Contains('\n'))
                 {
-                    continue;
-                }
-                
-                // Mark that we're in a response if we see the assistant marker
-                if (tokenValue.Contains("Assistant:"))
-                {
-                    isInResponse = true;
+                    var lines = tokenValue.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var line in lines)
+                    {
+                        if (ProcessStreamingLine(line, ref isInResponse, ref shouldSkipLine))
+                        {
+                            tokenBuffer.Add(line);
+                            
+                            // If the buffer has accumulated enough, emit a token
+                            if (tokenBuffer.Count >= 5 || tokenBuffer.Sum(t => t.Length) > 50)
+                            {
+                                yield return string.Join(" ", tokenBuffer);
+                                tokenBuffer.Clear();
+                            }
+                        }
+                    }
                     continue;
                 }
                 
                 // Skip all system messages, logs, and metadata
-                if (!isInResponse || 
-                    tokenValue.Contains("| INFO |") || 
+                if (tokenValue.Contains("| INFO |") || 
                     tokenValue.Contains("| WARNING |") || 
                     tokenValue.Contains("| ERROR |") || 
                     tokenValue.Contains("| DEBUG |") ||
                     tokenValue.StartsWith("[") ||
                     tokenValue.StartsWith("System:") ||
-                    tokenValue.StartsWith("Bot:") ||
-                    tokenValue.StartsWith("User:") ||
-                    tokenValue.StartsWith("Human:") ||
-                    tokenValue.Contains("Bot is thinking...") ||
-                    tokenValue.Contains("You:") ||
-                    tokenValue.Contains("Wait,") ||
-                    tokenValue.Contains("Therefore,") ||
-                    tokenValue.Contains("So, the bot") ||
-                    tokenValue.Contains("Maybe I should") ||
-                    tokenValue.Contains("Alright,") ||
-                    tokenValue.Contains("No relevant RAG context found"))
+                    tokenValue.Contains("COMMAND_COMPLETE"))
                 {
                     continue;
+                }
+                
+                // Mark that we're in a response if we see the assistant marker
+                if (tokenValue.Contains("Assistant:") || tokenValue.Contains("Bot:"))
+                {
+                    isInResponse = true;
+                    continue;
+                }
+                
+                // Detect end of response
+                if (isInResponse && 
+                    (tokenValue.Contains("User:") || 
+                     tokenValue.Contains("Human:") || 
+                     tokenValue.Contains("You:") || 
+                     tokenValue.Trim() == ">"))
+                {
+                    isInResponse = false;
+                    
+                    // Emit any remaining tokens in the buffer
+                    if (tokenBuffer.Count > 0)
+                    {
+                        yield return string.Join(" ", tokenBuffer);
+                        tokenBuffer.Clear();
+                    }
+                    
+                    break;
+                }
+                
+                // Only emit tokens if we're in the response section
+                if (isInResponse && !shouldSkipLine && !string.IsNullOrWhiteSpace(tokenValue))
+                {
+                    // Add to buffer
+                    tokenBuffer.Add(tokenValue);
+                    
+                    // If the buffer is reasonably sized, emit it
+                    if (tokenBuffer.Count >= 3 || tokenBuffer.Sum(t => t.Length) > 20)
+                    {
+                        yield return string.Join("", tokenBuffer);
+                        tokenBuffer.Clear();
+                    }
                 }
                 
                 linkedCts.Token.ThrowIfCancellationRequested();
-                
-                // Clean up any remaining role prefixes or system text
-                var cleanToken = tokenValue
-                    .Replace("Assistant:", "")
-                    .Replace("Human:", "")
-                    .Replace("Bot:", "")
-                    .Trim();
-                
-                if (string.IsNullOrWhiteSpace(cleanToken))
-                {
-                    continue;
-                }
-                
-                // For test tokens, yield them directly if they don't need cleaning
-                if (!tokenValue.Contains("Assistant:") && 
-                    !tokenValue.Contains("Human:") && 
-                    !tokenValue.Contains("Bot:"))
-                {
-                    yield return cleanToken;
-                    continue;
-                }
-                
-                // Accumulate tokens until we have a complete word or punctuation
-                if (pendingToken == null)
-                {
-                    pendingToken = cleanToken;
-                }
-                else
-                {
-                    pendingToken += cleanToken;
-                }
-                
-                // Output complete words or when we have punctuation
-                if (pendingToken.EndsWith(" ") || 
-                    pendingToken.EndsWith(".") || 
-                    pendingToken.EndsWith("!") || 
-                    pendingToken.EndsWith("?") ||
-                    pendingToken.EndsWith(",") ||
-                    pendingToken.EndsWith(":") ||
-                    pendingToken.EndsWith(";"))
-                {
-                    // Clean up any double spaces that might have been created
-                    var finalToken = pendingToken.Replace("  ", " ").Trim();
-                    if (!string.IsNullOrWhiteSpace(finalToken))
-                    {
-                        yield return finalToken + (pendingToken.EndsWith(" ") ? " " : "");
-                    }
-                    pendingToken = null;
-                }
             }
             
-            // Output any remaining pending token
-            if (pendingToken != null)
+            // Emit any remaining tokens in the buffer
+            if (tokenBuffer.Count > 0)
             {
-                var finalToken = pendingToken.Replace("  ", " ").Trim();
-                if (!string.IsNullOrWhiteSpace(finalToken))
-                {
-                    yield return finalToken;
-                }
+                yield return string.Join("", tokenBuffer);
             }
         }
         finally
         {
-            // Ensure we dispose of the enumerator
-            await enumerator.DisposeAsync();
+            tokenBuffer.Clear();
         }
+    }
+    
+    /// <summary>
+    /// Processes a line from the streaming response to determine if it should be included
+    /// </summary>
+    /// <param name="line">The line to process</param>
+    /// <param name="isInResponse">Reference to whether we're currently in a response section</param>
+    /// <param name="shouldSkipLine">Reference to whether the current line should be skipped</param>
+    /// <returns>True if the line should be included in the response, false otherwise</returns>
+    private bool ProcessStreamingLine(string line, ref bool isInResponse, ref bool shouldSkipLine)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+        
+        // Skip log messages and system notifications
+        if (line.Contains("| INFO |") ||
+            line.Contains("| WARNING |") ||
+            line.Contains("| ERROR |") ||
+            line.Contains("| DEBUG |") ||
+            line.StartsWith("[") ||
+            line.Contains("COMMAND_COMPLETE") ||
+            line.StartsWith("System:") ||
+            line.Contains("Bot is thinking..."))
+        {
+            shouldSkipLine = true;
+            return false;
+        }
+        
+        // Detect the start of actual response
+        if (line.Contains("Assistant:") || line.Contains("Bot:"))
+        {
+            isInResponse = true;
+            shouldSkipLine = true;
+            return false;
+        }
+        
+        // Detect the end of response
+        if (isInResponse && 
+            (line.Contains("User:") || 
+             line.Contains("Human:") || 
+             line.Contains("You:") || 
+             line.Trim() == ">"))
+        {
+            isInResponse = false;
+            shouldSkipLine = true;
+            return false;
+        }
+        
+        shouldSkipLine = false;
+        return isInResponse || (!line.StartsWith("User:") && !line.StartsWith("Human:") && !line.StartsWith("You:"));
     }
     
     /// <summary>

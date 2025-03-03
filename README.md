@@ -614,10 +614,11 @@ flowchart LR
     P2[Phase 2: Publisher]
     P3[Phase 3: Chat Client]
     P4[Phase 4: Integration]
-    P5[Final Release]
+    P5[Phase 5: IPFS Integration]
+    P6[Final Release]
     
     %% Phase connections
-    P1 --> P2 --> P3 --> P4 --> P5
+    P1 --> P2 --> P3 --> P4 --> P5 --> P6
     
     %% Key phase details as subgraphs
     subgraph P1D["Phase 1 Details"]
@@ -644,11 +645,19 @@ flowchart LR
         P4_3[End-to-End Tests]
     end
     
+    subgraph P5D["Phase 5 Details"]
+        P5_1[IPFS Content Addressing]
+        P5_2[Transport-Agnostic Layer]
+        P5_3[DHT & PubSub Integration]
+        P5_4[Offline Support]
+    end
+    
     %% Connect phases to their details
     P1 --- P1D
     P2 --- P2D
     P3 --- P3D
     P4 --- P4D
+    P5 --- P5D
     
     %% Style definitions using traditional class assignments
     classDef completed fill:transparent,stroke:#228B22,color:#228B22,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
@@ -663,14 +672,305 @@ flowchart LR
     %% Apply classes using traditional syntax
     class P1,P2,P3 completed
     class P4 inProgress
-    class P5 planned
-    class P1D,P2D,P3D,P4D detailBox
+    class P5,P6 planned
+    class P1D,P2D,P3D,P4D,P5D detailBox
     class P1_1,P1_2,P1_3,P2_1,P2_2,P2_3,P3_1,P3_2,P3_3 done
     class P4_1 inProg
-    class P4_2,P4_3 plan
+    class P4_2,P4_3,P5_1,P5_2,P5_3,P5_4 plan
 ```
 
 **Legend:** ✅ Done &nbsp;|&nbsp; 🔶 In Progress &nbsp;|&nbsp; ⬜ Planned
+
+## Phase 5: IPFS Integration
+
+Phase 5 focuses on implementing the InterPlanetary File System (IPFS) for decentralized adapter distribution. IPFS will enable resilient, content-addressed storage and retrieval of adapters across distributed networks.
+
+### Core IPFS Principles
+
+Our implementation adheres to IPFS core principles:
+
+1. **Content Addressing**: Adapters are addressed by their content (CID) rather than location
+2. **Transport Agnosticism**: Storage and retrieval work over any transport protocol
+3. **Verification**: All content is cryptographically verified against its CID
+4. **Offline Support**: Adapters remain available even without internet connectivity
+
+### IPFS Architecture
+
+```mermaid
+flowchart TD
+    %% Main components
+    Publisher[Publisher Service]
+    Client[Chat Client]
+    IPFS[IPFS Layer]
+    
+    %% IPFS components
+    subgraph IPFSComponents["IPFS Integration Layer"]
+        ContentAddressing["Content Addressing System"]
+        TransportLayer["Transport-Agnostic Layer"]
+        Registry["Adapter Registry"]
+        PubSub["PubSub Notification"]
+        DHT["DHT & Peer Discovery"]
+        Security["Security & Encryption"]
+        Offline["Offline Support"]
+        
+        style ContentAddressing fill:transparent,stroke:#d32f2f
+        style TransportLayer fill:transparent,stroke:#d32f2f
+        style Registry fill:transparent,stroke:#d32f2f
+        style PubSub fill:transparent,stroke:#d32f2f
+        style DHT fill:transparent,stroke:#d32f2f
+        style Security fill:transparent,stroke:#d32f2f
+        style Offline fill:transparent,stroke:#d32f2f
+    end
+    
+    %% Interactions
+    Publisher --- IPFS
+    Client --- IPFS
+    IPFS --- IPFSComponents
+    
+    style Publisher fill:transparent,stroke:#2e7d32
+    style Client fill:transparent,stroke:#ff8f00
+    style IPFS fill:transparent,stroke:#0097a7
+    style IPFSComponents fill:transparent,stroke:#5c6bc0,stroke-width:2px
+```
+
+### Implementation Tasks
+
+#### 1. IPFS Content Addressing System
+
+- **Implement CID Generation**: Support both CIDv0 and CIDv1 with appropriate multihash
+- **Create Verification Pipeline**: Verify all adapter content against CIDs
+- **Support Incremental Verification**: Handle large adapters efficiently
+- **Implement Content Integrity Checking**: Guarantee adapter data hasn't been modified
+
+```csharp
+// Sample CID generation and verification
+public class ContentAddressingSystem : IContentAddressingSystem
+{
+    public async Task<string> GenerateCidAsync(string filePath, CancellationToken token = default)
+    {
+        // Calculate multihash from file content
+        // Format as CIDv1 with appropriate codec information
+        // Return formatted CID
+    }
+    
+    public async Task<bool> VerifyContentAsync(string filePath, string cid, CancellationToken token = default)
+    {
+        // Generate CID from current content
+        // Compare with the provided CID
+        // Return verification result
+    }
+}
+```
+
+#### 2. Transport-Agnostic Layer
+
+- **Create Abstracted API Interface**: Support multiple IPFS implementations
+- **Implement HTTP API Client**: For interaction with Kubo nodes
+- **Add Direct libp2p Support**: For peer-to-peer communication
+- **Support Multiple Transports**: HTTP, WebSockets, TCP/IP
+
+```csharp
+// Transport-agnostic interface
+public interface IIpfsTransport
+{
+    Task<byte[]> GetAsync(string cid, CancellationToken token = default);
+    Task<string> AddAsync(byte[] data, CancellationToken token = default);
+    Task<bool> PinAsync(string cid, CancellationToken token = default);
+    // Additional transport operations
+}
+
+// Implementation for HTTP API
+public class IpfsHttpTransport : IIpfsTransport
+{
+    private readonly HttpClient _client;
+    private readonly string _apiEndpoint;
+    
+    // Implementation of transport-agnostic operations via HTTP
+}
+
+// Implementation for direct libp2p
+public class IpfsLibp2pTransport : IIpfsTransport
+{
+    // Implementation via direct libp2p protocol
+}
+```
+
+#### 3. DHT & PubSub Integration
+
+- **Implement DHT-Based Peer Discovery**: Find peers with desired adapters
+- **Create PubSub Announcement System**: Real-time adapter notifications
+- **Build Bootstrapping Mechanism**: Connect to network efficiently
+- **Implement Routing Table Management**: Optimize peer connections
+
+```csharp
+// DHT-based peer discovery
+public class DhtPeerDiscovery : IPeerDiscovery
+{
+    public async Task<IEnumerable<PeerInfo>> FindProvidersAsync(string cid, int limit = 20)
+    {
+        // Use DHT to find providers of the specified CID
+        // Return list of peers that can provide the content
+    }
+}
+
+// PubSub for adapter announcements
+public class AdapterAnnouncementSystem : IAdapterAnnouncementSystem
+{
+    public event EventHandler<AdapterAnnouncedEventArgs> AdapterAnnounced;
+    
+    public async Task AnnounceAdapterAsync(IAdapterInfo adapter)
+    {
+        // Publish adapter information to PubSub topic
+    }
+    
+    public async Task SubscribeToAnnouncementsAsync()
+    {
+        // Subscribe to adapter announcement topic
+        // Raise events when new adapters are announced
+    }
+}
+```
+
+#### 4. Adapter Registry
+
+- **Build Distributed Adapter Catalog**: Track available adapters
+- **Implement Metadata Indexing**: Enable adapter search and filtering
+- **Create Version Management**: Track adapter revisions
+- **Support Adapter Discovery**: Find adapters by capabilities
+
+```csharp
+// Adapter registry
+public class IpfsAdapterRegistry : IAdapterRegistry
+{
+    public async Task<bool> RegisterAdapterAsync(IAdapterInfo adapter)
+    {
+        // Store adapter metadata in the registry
+        // Index by model, capabilities, etc.
+        // Return success status
+    }
+    
+    public async Task<IEnumerable<IAdapterInfo>> QueryAdaptersAsync(
+        string modelId = null, 
+        Dictionary<string, object> capabilities = null)
+    {
+        // Search registry for adapters matching criteria
+        // Return matching adapter information
+    }
+}
+```
+
+#### 5. Offline Support System
+
+- **Implement Local Adapter Cache**: Keep adapters available offline
+- **Create Sync Mechanism**: Update when connectivity returns
+- **Build Prefetching Logic**: Download related adapters proactively
+- **Implement Cache Management**: Handle limited storage scenarios
+
+```csharp
+// Offline support system
+public class OfflineSupport : IOfflineSupport
+{
+    public async Task<IAdapterInfo> GetOfflineAdapterAsync(string adapterIdentifier)
+    {
+        // Check local cache for adapter
+        // Return adapter if available
+        // Otherwise return null or throw
+    }
+    
+    public async Task CacheAdapterAsync(IAdapterInfo adapter)
+    {
+        // Store adapter in local cache
+        // Index for offline retrieval
+    }
+    
+    public async Task SyncCacheAsync(CancellationToken token = default)
+    {
+        // Sync local cache with network when online
+        // Update metadata and download new versions
+    }
+}
+```
+
+#### 6. Security Features
+
+- **Implement Access Control**: Manage adapter publishing permissions
+- **Add Content Encryption**: Protect sensitive adapter data
+- **Create Signature Verification**: Validate adapter authenticity
+- **Support Private Networks**: Enable organizational adapter sharing
+
+```csharp
+// Security system
+public class IpfsSecurity : IIpfsSecurity
+{
+    public async Task<string> EncryptAdapterAsync(string adapterPath, byte[] encryptionKey)
+    {
+        // Encrypt adapter files
+        // Return path to encrypted content
+    }
+    
+    public async Task<string> DecryptAdapterAsync(string encryptedPath, byte[] encryptionKey)
+    {
+        // Decrypt adapter files
+        // Return path to decrypted content
+    }
+    
+    public async Task<bool> VerifySignatureAsync(string adapterPath, byte[] publicKey)
+    {
+        // Verify adapter signature
+        // Return verification result
+    }
+}
+```
+
+#### 7. IPFS Integration Testing
+
+- **Create Mock IPFS Node**: For testing without network
+- **Implement Test Fixtures**: Standard test scenarios
+- **Build Performance Benchmarks**: Measure operation times
+- **Create Fault Injection**: Test resilience to network issues
+
+```csharp
+// IPFS integration tests
+public class IpfsIntegrationTests
+{
+    [Fact]
+    public async Task ShouldRetrieveAdapterByContentId()
+    {
+        // Arrange: Set up test adapter and CID
+        // Act: Retrieve adapter using CID
+        // Assert: Verify adapter was retrieved correctly
+    }
+    
+    [Fact]
+    public async Task ShouldWorkInOfflineMode()
+    {
+        // Arrange: Set up cached adapter
+        // Act: Disconnect network and retrieve adapter
+        // Assert: Verify adapter is available offline
+    }
+    
+    // Additional integration tests
+}
+```
+
+### Migration Strategy
+
+The transition from local storage to IPFS will follow this phased approach:
+
+1. **Parallel Implementation**: Build IPFS alongside existing storage
+2. **Dual Publishing Mode**: Store adapters both locally and on IPFS
+3. **Client-Side Support**: Add IPFS support to ChatClient
+4. **Gradual Transition**: Shift from local to IPFS storage
+5. **Backward Compatibility**: Maintain support for legacy storage
+
+### IPFS Implementation Benefits
+
+- **Resilience**: No single point of failure
+- **Decentralization**: Adapters available from multiple sources
+- **Global Distribution**: Worldwide adapter availability
+- **Version Control**: Natural handling of adapter versions
+- **Offline Access**: Adapters available without internet
+- **Peer-to-Peer Sharing**: Direct adapter sharing between clients
 
 ## Python Adapter Structure
 

@@ -532,10 +532,30 @@ public class PythonProcessManager : IPythonProcessManager, IDisposable
             e.Data.Contains("INFO") || 
             e.Data.Contains("WARNING") || 
             e.Data.Contains("ERROR") || 
-            e.Data.Contains("DEBUG") ||
-            e.Data.Contains("[RAG]"))
+            e.Data.Contains("DEBUG"))
         {
             // These are log messages, don't add them to the output channel
+            return;
+        }
+        
+        // Special handling for RAG-related output
+        if (e.Data.StartsWith("[RAG]"))
+        {
+            // For RAG commands, we want to include the output but not the log prefix
+            var cleanedLine = e.Data.Replace("[RAG] ", "");
+            _outputChannel.Writer.TryWrite(cleanedLine);
+            return;
+        }
+        
+        // Special handling for ANSI color codes
+        if (e.Data.Contains("\u001b["))
+        {
+            // Remove ANSI color codes but keep the content
+            var cleanedLine = System.Text.RegularExpressions.Regex.Replace(
+                e.Data,
+                @"\u001b\[\d*(;\d*)*m",
+                string.Empty);
+            _outputChannel.Writer.TryWrite(cleanedLine);
             return;
         }
         

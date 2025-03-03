@@ -97,153 +97,130 @@ The solution consists of three main projects:
 
 ### Core Interfaces
 
-The Common library defines these key interfaces:
-
-```csharp
-public interface IAdapterInfo
-{
-    string Name { get; }
-    string FilePath { get; }
-    DateTime Created { get; }
-    Dictionary<string, object> Metadata { get; }
-}
-
-public interface IAdapterPublisher
-{
-    event EventHandler<AdapterEventArgs> AdapterPublished;
-    IReadOnlyList<IAdapterInfo> GetAvailableAdapters();
-    Task<IAdapterInfo> GetLatestAdapterAsync();
-}
-
-public interface IPythonProcessManager
-{
-    event EventHandler<string> OutputReceived;
-    event EventHandler<string> ErrorReceived;
-    Task StartAsync(string pythonPath, string scriptPath, string[] args);
-    Task<string> SendCommandAsync(string command, CancellationToken token = default);
-    IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
-    Task StopAsync();
-    bool IsRunning { get; }
-}
-
-public interface IModelService
-{
-    event EventHandler<string> MessageReceived;
-    event EventHandler<string> ErrorReceived;
-    bool IsInitialized { get; }
-    IAdapterInfo? CurrentAdapter { get; }
+```mermaid
+classDiagram
+    class IAdapterInfo {
+        +string Name
+        +string FilePath
+        +DateTime Created
+        +Dictionary~string,object~ Metadata
+    }
     
-    Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
-    Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
-    IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
-    Task ExecuteSpecialCommandAsync(string command);
-    Task ShutdownAsync();
-}
-
-public interface IAdapterManager
-{
-    event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
-    Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
-    Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
-    Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
-    Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
-}
-
-public interface IChatUI
-{
-    void DisplayMessage(string role, string message);
-    Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
-    void AnnounceNewAdapter(IAdapterInfo adapter);
-    Task<string> GetUserInputAsync();
-    void DisplayError(string message);
-    void DisplaySystemMessage(string message);
-}
+    class IAdapterPublisher {
+        +event EventHandler~AdapterEventArgs~ AdapterPublished
+        +IReadOnlyList~IAdapterInfo~ GetAvailableAdapters()
+        +Task~IAdapterInfo~ GetLatestAdapterAsync()
+    }
+    
+    class IPythonProcessManager {
+        +event EventHandler~string~ OutputReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsRunning
+        +Task StartAsync(string pythonPath, string scriptPath, string[] args)
+        +Task~string~ SendCommandAsync(string command, CancellationToken token)
+        +IAsyncEnumerable~string~ SendCommandStreamingAsync(string command, CancellationToken token)
+        +Task StopAsync()
+    }
+    
+    class IModelService {
+        +event EventHandler~string~ MessageReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsInitialized
+        +IAdapterInfo? CurrentAdapter
+        +Task InitializeAsync(IAdapterInfo adapter, string? configPath, bool skipValidation)
+        +Task~string~ GenerateResponseAsync(string prompt, CancellationToken token)
+        +IAsyncEnumerable~string~ GenerateStreamingResponseAsync(string prompt, CancellationToken token)
+        +Task ExecuteSpecialCommandAsync(string command)
+        +Task ShutdownAsync()
+    }
+    
+    class IAdapterManager {
+        +event EventHandler~AdapterEventArgs~ NewAdapterAnnounced
+        +Task~IAdapterInfo~ LoadAdapterAsync(string adapterPath)
+        +Task~IAdapterInfo~ GetLatestAdapterAsync(IAdapterPublisher publisher)
+        +Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter)
+        +Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token)
+    }
+    
+    class IChatUI {
+        +void DisplayMessage(string role, string message)
+        +Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable~string~ messageTokens)
+        +void AnnounceNewAdapter(IAdapterInfo adapter)
+        +Task~string~ GetUserInputAsync()
+        +void DisplayError(string message)
+        +void DisplaySystemMessage(string message)
+    }
 ```
 
 ### Publisher Services
 
-The Publisher project implements these key services:
-
-```csharp
-public class AdapterSelector
-{
-    public IEnumerable<string> GetAvailableAdapterDirectories();
-}
-
-public class AdapterValidator
-{
-    public bool ValidateAdapter(string adapterPath);
-}
-
-public class AdapterInfoExtractor
-{
-    public Task<IAdapterInfo> ExtractAdapterInfoAsync(string adapterPath);
-}
+```mermaid
+classDiagram
+    class AdapterSelector {
+        +IEnumerable~string~ GetAvailableAdapterDirectories()
+    }
+    
+    class AdapterValidator {
+        +bool ValidateAdapter(string adapterPath)
+    }
+    
+    class AdapterInfoExtractor {
+        +Task~IAdapterInfo~ ExtractAdapterInfoAsync(string adapterPath)
+    }
 ```
 
 ### Chat Client Services
 
-The ChatClient project implements these key services:
-
-```csharp
-public class PythonProcessManager : IPythonProcessManager, IDisposable
-{
-    public event EventHandler<string> OutputReceived;
-    public event EventHandler<string> ErrorReceived;
-    public bool IsRunning { get; }
+```mermaid
+classDiagram
+    class PythonProcessManager {
+        +event EventHandler~string~ OutputReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsRunning
+        +Task StartAsync(string pythonPath, string scriptPath, string[] args)
+        +Task~string~ SendCommandAsync(string command, CancellationToken token)
+        +IAsyncEnumerable~string~ SendCommandStreamingAsync(string command, CancellationToken token)
+        +Task StopAsync()
+        +void Dispose()
+    }
     
-    public Task StartAsync(string pythonPath, string scriptPath, string[] args);
-    public Task<string> SendCommandAsync(string command, CancellationToken token = default);
-    public IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
-    public Task StopAsync();
-    public void Dispose();
-}
-
-public class PythonModelService : IModelService, IDisposable
-{
-    public event EventHandler<string> MessageReceived;
-    public event EventHandler<string> ErrorReceived;
-    public bool IsInitialized { get; }
-    public IAdapterInfo? CurrentAdapter { get; }
+    class PythonModelService {
+        +event EventHandler~string~ MessageReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsInitialized
+        +IAdapterInfo? CurrentAdapter
+        +Task InitializeAsync(IAdapterInfo adapter, string? configPath, bool skipValidation)
+        +Task~string~ GenerateResponseAsync(string prompt, CancellationToken token)
+        +IAsyncEnumerable~string~ GenerateStreamingResponseAsync(string prompt, CancellationToken token)
+        +Task ExecuteSpecialCommandAsync(string command)
+        +Task ShutdownAsync()
+        +void Dispose()
+    }
     
-    public Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
-    public Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
-    public IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
-    public Task ExecuteSpecialCommandAsync(string command);
-    public Task ShutdownAsync();
-    public void Dispose();
-}
-
-public class AdapterManager : IAdapterManager
-{
-    public event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
+    class AdapterManager {
+        +event EventHandler~AdapterEventArgs~ NewAdapterAnnounced
+        +Task~IAdapterInfo~ LoadAdapterAsync(string adapterPath)
+        +Task~IAdapterInfo~ GetLatestAdapterAsync(IAdapterPublisher publisher)
+        +Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter)
+        +Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token)
+    }
     
-    public Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
-    public Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
-    public Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
-    public Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
-}
-
-public class ConsoleChatUI : IChatUI
-{
-    public void DisplayMessage(string role, string message);
-    public Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
-    public void AnnounceNewAdapter(IAdapterInfo adapter);
-    public Task<string> GetUserInputAsync();
-    public void DisplayError(string message);
-    public void DisplaySystemMessage(string message);
-}
-
-public class ChatSession : IDisposable
-{
-    public Task StartAsync(IAdapterPublisher publisher);
-    public void Stop();
-    public void Dispose();
+    class ConsoleChatUI {
+        +void DisplayMessage(string role, string message)
+        +Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable~string~ messageTokens)
+        +void AnnounceNewAdapter(IAdapterInfo adapter)
+        +Task~string~ GetUserInputAsync()
+        +void DisplayError(string message)
+        +void DisplaySystemMessage(string message)
+    }
     
-    // Private methods for handling messages and commands
-    private Task HandleUserMessageAsync(string message);
-    private Task HandleSpecialCommandAsync(string command);
-}
+    class ChatSession {
+        +Task StartAsync(IAdapterPublisher publisher)
+        +void Stop()
+        +void Dispose()
+        -Task HandleUserMessageAsync(string message)
+        -Task HandleSpecialCommandAsync(string command)
+    }
 ```
 
 ## Getting Started
@@ -312,75 +289,156 @@ public class ChatSession : IDisposable
 ### Project Architecture
 
 ```mermaid
-graph TD
-    A[LLMAdapterClient Solution] --> B[ChatClient]
-    A --> C[Publisher]
-    A --> D[Common]
+flowchart TD
+    %% Main Solution Components
+    subgraph Solution["LLMAdapterClient Solution"]
+        style Solution fill:transparent,stroke:#333,stroke-width:2px
+        
+        subgraph Common["Common Library"]
+            style Common fill:transparent,stroke:#0097a7,stroke-width:2px
+            Interfaces["Core Interfaces"]
+            style Interfaces fill:transparent,stroke:#00bcd4
+        end
+        
+        subgraph Publisher["Publisher Application"]
+            style Publisher fill:transparent,stroke:#2e7d32,stroke-width:2px
+            AdapterSelector("AdapterSelector")
+            AdapterValidator("AdapterValidator")
+            AdapterInfoExtractor("AdapterInfoExtractor")
+            
+            style AdapterSelector fill:transparent,stroke:#4caf50
+            style AdapterValidator fill:transparent,stroke:#4caf50
+            style AdapterInfoExtractor fill:transparent,stroke:#4caf50
+        end
+        
+        subgraph ChatClient["Chat Client Application"]
+            style ChatClient fill:transparent,stroke:#ff8f00,stroke-width:2px
+            PPM["PythonProcessManager"]
+            ModelService["ModelService"]
+            AdapterManager["AdapterManager"]
+            ChatUI["ConsoleChatUI"]
+            ChatSession["ChatSession"]
+            
+            style PPM fill:transparent,stroke:#ffc107
+            style ModelService fill:transparent,stroke:#ffc107
+            style AdapterManager fill:transparent,stroke:#ffc107
+            style ChatUI fill:transparent,stroke:#ffc107
+            style ChatSession fill:transparent,stroke:#ffc107
+        end
+    end
     
-    C --> E[AdapterSelector]
-    C --> F[AdapterValidator]
-    C --> G[AdapterInfoExtractor]
+    %% External System
+    subgraph PythonSystem["Python Training System"]
+        style PythonSystem fill:transparent,stroke:#7b1fa2,stroke-width:2px
+        TrainingScript["main.py"]
+        Adapters["Generated Adapters"]
+        
+        style TrainingScript fill:transparent,stroke:#9c27b0
+        style Adapters fill:transparent,stroke:#9c27b0
+        
+        TrainingScript -->|produces| Adapters
+    end
     
-    B --> H[PythonProcessManager]
-    B --> I[ModelService]
-    B --> J[AdapterManager]
-    B --> K[ConsoleChatUI]
-    B --> L[ChatSession]
+    %% Relationships within Publisher
+    AdapterSelector -->|finds| AdapterValidator
+    AdapterValidator -->|validates| AdapterInfoExtractor
     
-    B --> D
-    C --> D
-    E & F & G --> D
-    H & I & J & K & L --> D
-
-    P[Python Training System] -.-> C
-    P -.-> H
-    P -.-> I
-    C -.-> B
+    %% Relationships within ChatClient
+    ChatSession -->|uses| ModelService
+    ChatSession -->|uses| ChatUI
+    ChatSession -->|uses| AdapterManager
+    ModelService -->|manages| PPM
+    
+    %% Cross-component relationships
+    Publisher -->|implements| Interfaces
+    ChatClient -->|implements| Interfaces
+    AdapterSelector & AdapterValidator & AdapterInfoExtractor -->|use| Interfaces
+    PPM & ModelService & AdapterManager & ChatUI & ChatSession -->|use| Interfaces
+    
+    %% External relationships
+    Adapters -.->|discovered by| AdapterSelector
+    Adapters -.->|loaded by| AdapterManager
+    TrainingScript -.->|interacts with| PPM
+    Publisher -.->|publishes to| ChatClient
 ```
 
 ### Data Flow
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Training as Python Training
-    participant Publisher
-    participant Services as Publisher Services
-    participant ChatClient
-    participant ChatSession
-    participant ChatUI
-    participant AdapterManager
-    participant ModelService
-    participant PythonMgr as Python Process Manager
+    %% Participants with emoji and color indicators
+    participant User as "👤 User"
+    participant Training as "🐍 Python Training"
+    participant Publisher as "📤 Publisher"
+    participant Services as "🛠️ Publisher Services"
+    participant ChatClient as "💬 ChatClient"
+    participant ChatSession as "🔄 ChatSession"
+    participant ChatUI as "🖥️ ConsoleChatUI"
+    participant AdapterManager as "📂 AdapterManager"
+    participant ModelService as "🧠 ModelService"
+    participant PythonMgr as "⚙️ Python Process Manager"
     
-    User->>Training: Train Model
-    Training->>Publisher: Create Adapter File
-    Publisher->>Services: Discover & Validate
+    %% Section headers with color notes
+    Note over Training: Python Training System
+    
+    %% Adapter Training Flow
+    autonumber 1
+    User->>+Training: Train Model
+    Training-->>-Publisher: Create Adapter File
+    
+    Note over Publisher: Publisher Application
+    
+    %% Publisher Processing Flow
+    autonumber 3
+    Publisher->>+Services: Discover & Validate Adapters
     Services->>Services: Extract Metadata
-    Publisher->>Publisher: Monitor & Sync
+    Services-->>-Publisher: Return Adapter Information
+    Publisher->>Publisher: Monitor & Sync Adapters
     
-    User->>ChatClient: Start Chat
-    ChatClient->>Publisher: Check for Updates
-    Publisher-->>ChatClient: Sync New Adapters
-    ChatClient->>ChatSession: Initialize Session
-    ChatSession->>AdapterManager: Get Latest Adapter
-    AdapterManager->>ModelService: Initialize Model
-    ModelService->>PythonMgr: Initialize Python Process
-    PythonMgr->>Training: Interact with Python Script
+    Note over ChatClient: Chat Client Application
     
-    User->>ChatUI: Enter Message
-    ChatUI->>ChatSession: Process Message
-    ChatSession->>ModelService: Generate Response
-    ModelService->>PythonMgr: Send Prompt
-    PythonMgr-->>ModelService: Stream Response Tokens
-    ModelService-->>ChatSession: Forward Response Tokens
-    ChatSession-->>ChatUI: Display Streaming Response
-    ChatUI-->>User: Show Response
+    %% Chat Initialization Flow
+    autonumber 7
+    User->>+ChatClient: Start Chat Application
+    ChatClient->>+Publisher: Request Latest Adapters
+    Publisher-->>-ChatClient: Sync Available Adapters
+    ChatClient->>+ChatSession: Initialize Chat Session
+    ChatSession->>+AdapterManager: Get Latest Adapter
+    AdapterManager-->>-ChatSession: Return Best Adapter
+    ChatSession->>+ModelService: Initialize Model with Adapter
+    ModelService->>+PythonMgr: Start Python Process
+    PythonMgr->>Training: Load Model & Adapter
+    PythonMgr-->>-ModelService: Report Initialization Complete
+    ModelService-->>-ChatSession: Report Model Ready
+    ChatSession-->>-ChatClient: Session Initialization Complete
+    ChatClient-->>-User: Display Welcome Message
     
-    Publisher-->>AdapterManager: Announce New Adapter
-    AdapterManager-->>ChatSession: Notify New Adapter
-    ChatSession-->>ChatUI: Announce New Adapter
-    ChatUI-->>User: Display Adapter Notification
+    %% Chat Interaction Flow
+    autonumber 20
+    User->>+ChatUI: Enter Message or Command
+    ChatUI->>+ChatSession: Forward User Input
+    ChatSession->>+ModelService: Generate Response
+    ModelService->>+PythonMgr: Send Prompt to Python
+    PythonMgr-->>PythonMgr: Process Input & Generate Tokens
+    PythonMgr-->>-ModelService: Stream Response Tokens
+    ModelService-->>-ChatSession: Forward Processed Tokens
+    ChatSession-->>-ChatUI: Display Streaming Response
+    ChatUI-->>-User: Show Formatted Response
+    
+    %% New Adapter Notification Flow
+    autonumber 29
+    Publisher-->>+AdapterManager: Announce New Adapter Available
+    AdapterManager-->>+ChatSession: Notify New Adapter Detected
+    ChatSession-->>+ChatUI: Announce Adapter Update
+    ChatUI-->>-User: Display Update Notification
+    ChatSession->>+ModelService: Update Model with New Adapter
+    ModelService-->>-ChatSession: Confirm Adapter Updated
+    
+    %% Legend
+    Note over User, PythonMgr: Sequence Legend:
+    Note over User, PythonMgr: → Solid arrows: Direct method calls/actions
+    Note over User, PythonMgr: → Dashed arrows: Responses/events/callbacks
+    Note over User, PythonMgr: | Activation bars: Component active duration
 ```
 
 ### Testing
@@ -549,38 +607,96 @@ The test suite includes:
 
 ## Implementation Status
 
-- ✅ Phase 1: Project Structure and Common Components
-  - Created solution structure with three projects
-  - Implemented core interfaces (IAdapterInfo, IAdapterPublisher)
-  - Added comprehensive tests for interfaces
-- ✅ Phase 2: Publisher Implementation
-  - ✅ Implemented adapter selection service
-  - ✅ Implemented adapter validation service
-  - ✅ Implemented metadata extraction service
-  - ✅ Implemented adapter upload system
-  - ✅ Implemented publisher service with event handling
-- ✅ Phase 3: Chat Client Implementation
-  - ✅ Implemented Python process management
-  - ✅ Created tests for Python process interaction
-  - ✅ Implemented model service with adapter support
-  - ✅ Implemented adapter manager for loading and monitoring adapters
-  - ✅ Implemented chat UI with colored output and token streaming
-  - ✅ Implemented chat session with command handling and conversation flow
-- 🔄 Phase 4: Integration and System Tests
-  - ⏳ Implementing integration tests for system components
-  - ⏳ Creating system configuration management
-  - ⏳ Developing end-to-end tests for complete workflow validation
+```mermaid
+flowchart LR
+    %% Phase nodes with status
+    P1[Phase 1: Project Structure]
+    P2[Phase 2: Publisher]
+    P3[Phase 3: Chat Client]
+    P4[Phase 4: Integration]
+    P5[Final Release]
+    
+    %% Phase connections
+    P1 --> P2 --> P3 --> P4 --> P5
+    
+    %% Key phase details as subgraphs
+    subgraph P1D["Phase 1 Details"]
+        P1_1[Solution Structure]
+        P1_2[Core Interfaces]
+        P1_3[Interface Tests]
+    end
+    
+    subgraph P2D["Phase 2 Details"]
+        P2_1[Adapter Selection]
+        P2_2[Validation & Metadata]
+        P2_3[Upload & Publisher Service]
+    end
+    
+    subgraph P3D["Phase 3 Details"]
+        P3_1[Python Process & Model]
+        P3_2[Adapter Manager]
+        P3_3[Chat UI & Session]
+    end
+    
+    subgraph P4D["Phase 4 Details"]
+        P4_1[Integration Tests]
+        P4_2[System Configuration]
+        P4_3[End-to-End Tests]
+    end
+    
+    %% Connect phases to their details
+    P1 --- P1D
+    P2 --- P2D
+    P3 --- P3D
+    P4 --- P4D
+    
+    %% Style definitions using traditional class assignments
+    classDef completed fill:transparent,stroke:#228B22,color:#228B22,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef inProgress fill:transparent,stroke:#FF8C00,color:#FF8C00,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef planned fill:transparent,stroke:#A9A9A9,color:#A9A9A9,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef detailBox fill:transparent,stroke:#5c6bc0,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:14px
+    
+    classDef done fill:transparent,stroke:#228B22,color:#228B22,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef inProg fill:transparent,stroke:#FF8C00,color:#FF8C00,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef plan fill:transparent,stroke:#A9A9A9,color:#A9A9A9,fontFamily:Arial,sans-serif,fontSize:12px
+    
+    %% Apply classes using traditional syntax
+    class P1,P2,P3 completed
+    class P4 inProgress
+    class P5 planned
+    class P1D,P2D,P3D,P4D detailBox
+    class P1_1,P1_2,P1_3,P2_1,P2_2,P2_3,P3_1,P3_2,P3_3 done
+    class P4_1 inProg
+    class P4_2,P4_3 plan
+```
+
+**Legend:** ✅ Done &nbsp;|&nbsp; 🔶 In Progress &nbsp;|&nbsp; ⬜ Planned
 
 ## Python Adapter Structure
 
 The Python training system generates adapter files with the following structure:
 
-```
-best_model_adapter/
-├── README.md                # Usage instructions
-├── adapter_config.json      # Configuration parameters
-├── adapter_model.safetensors # Model weights
-└── metadata.pt              # Training metadata
+```mermaid
+graph TD
+    A[best_model_adapter/] --> B[README.md]
+    A --> C[adapter_config.json]
+    A --> D[adapter_model.safetensors]
+    A --> E[metadata.pt]
+    
+    B[README.md] -.-> |"Contains"| B1[Usage instructions]
+    C[adapter_config.json] -.-> |"Contains"| C1[Configuration parameters]
+    D[adapter_model.safetensors] -.-> |"Contains"| D1[Model weights]
+    E[metadata.pt] -.-> |"Contains"| E1[Training metadata]
+    
+    style A fill:transparent,stroke:#7b1fa2
+    style B fill:transparent,stroke:#9c27b0
+    style C fill:transparent,stroke:#9c27b0
+    style D fill:transparent,stroke:#9c27b0
+    style E fill:transparent,stroke:#9c27b0
+    style B1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
+    style C1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
+    style D1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
+    style E1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
 ```
 
 ## Documentation

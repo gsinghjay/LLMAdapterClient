@@ -122,6 +122,7 @@ shared_adapters/
 published_adapters/
 repomix-output.txt
 archive/
+LLMAdapterClient.ChatClient/llm_training-main/
 
 # Local configuration files
 *.local.json

@@ -97,153 +97,130 @@ The solution consists of three main projects:
 
 ### Core Interfaces
 
-The Common library defines these key interfaces:
-
-```csharp
-public interface IAdapterInfo
-{
-    string Name { get; }
-    string FilePath { get; }
-    DateTime Created { get; }
-    Dictionary<string, object> Metadata { get; }
-}
-
-public interface IAdapterPublisher
-{
-    event EventHandler<AdapterEventArgs> AdapterPublished;
-    IReadOnlyList<IAdapterInfo> GetAvailableAdapters();
-    Task<IAdapterInfo> GetLatestAdapterAsync();
-}
-
-public interface IPythonProcessManager
-{
-    event EventHandler<string> OutputReceived;
-    event EventHandler<string> ErrorReceived;
-    Task StartAsync(string pythonPath, string scriptPath, string[] args);
-    Task<string> SendCommandAsync(string command, CancellationToken token = default);
-    IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
-    Task StopAsync();
-    bool IsRunning { get; }
-}
-
-public interface IModelService
-{
-    event EventHandler<string> MessageReceived;
-    event EventHandler<string> ErrorReceived;
-    bool IsInitialized { get; }
-    IAdapterInfo? CurrentAdapter { get; }
+```mermaid
+classDiagram
+    class IAdapterInfo {
+        +string Name
+        +string FilePath
+        +DateTime Created
+        +Dictionary~string,object~ Metadata
+    }
     
-    Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
-    Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
-    IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
-    Task ExecuteSpecialCommandAsync(string command);
-    Task ShutdownAsync();
-}
-
-public interface IAdapterManager
-{
-    event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
-    Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
-    Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
-    Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
-    Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
-}
-
-public interface IChatUI
-{
-    void DisplayMessage(string role, string message);
-    Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
-    void AnnounceNewAdapter(IAdapterInfo adapter);
-    Task<string> GetUserInputAsync();
-    void DisplayError(string message);
-    void DisplaySystemMessage(string message);
-}
+    class IAdapterPublisher {
+        +event EventHandler~AdapterEventArgs~ AdapterPublished
+        +IReadOnlyList~IAdapterInfo~ GetAvailableAdapters()
+        +Task~IAdapterInfo~ GetLatestAdapterAsync()
+    }
+    
+    class IPythonProcessManager {
+        +event EventHandler~string~ OutputReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsRunning
+        +Task StartAsync(string pythonPath, string scriptPath, string[] args)
+        +Task~string~ SendCommandAsync(string command, CancellationToken token)
+        +IAsyncEnumerable~string~ SendCommandStreamingAsync(string command, CancellationToken token)
+        +Task StopAsync()
+    }
+    
+    class IModelService {
+        +event EventHandler~string~ MessageReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsInitialized
+        +IAdapterInfo? CurrentAdapter
+        +Task InitializeAsync(IAdapterInfo adapter, string? configPath, bool skipValidation)
+        +Task~string~ GenerateResponseAsync(string prompt, CancellationToken token)
+        +IAsyncEnumerable~string~ GenerateStreamingResponseAsync(string prompt, CancellationToken token)
+        +Task ExecuteSpecialCommandAsync(string command)
+        +Task ShutdownAsync()
+    }
+    
+    class IAdapterManager {
+        +event EventHandler~AdapterEventArgs~ NewAdapterAnnounced
+        +Task~IAdapterInfo~ LoadAdapterAsync(string adapterPath)
+        +Task~IAdapterInfo~ GetLatestAdapterAsync(IAdapterPublisher publisher)
+        +Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter)
+        +Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token)
+    }
+    
+    class IChatUI {
+        +void DisplayMessage(string role, string message)
+        +Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable~string~ messageTokens)
+        +void AnnounceNewAdapter(IAdapterInfo adapter)
+        +Task~string~ GetUserInputAsync()
+        +void DisplayError(string message)
+        +void DisplaySystemMessage(string message)
+    }
 ```
 
 ### Publisher Services
 
-The Publisher project implements these key services:
-
-```csharp
-public class AdapterSelector
-{
-    public IEnumerable<string> GetAvailableAdapterDirectories();
-}
-
-public class AdapterValidator
-{
-    public bool ValidateAdapter(string adapterPath);
-}
-
-public class AdapterInfoExtractor
-{
-    public Task<IAdapterInfo> ExtractAdapterInfoAsync(string adapterPath);
-}
+```mermaid
+classDiagram
+    class AdapterSelector {
+        +IEnumerable~string~ GetAvailableAdapterDirectories()
+    }
+    
+    class AdapterValidator {
+        +bool ValidateAdapter(string adapterPath)
+    }
+    
+    class AdapterInfoExtractor {
+        +Task~IAdapterInfo~ ExtractAdapterInfoAsync(string adapterPath)
+    }
 ```
 
 ### Chat Client Services
 
-The ChatClient project implements these key services:
-
-```csharp
-public class PythonProcessManager : IPythonProcessManager, IDisposable
-{
-    public event EventHandler<string> OutputReceived;
-    public event EventHandler<string> ErrorReceived;
-    public bool IsRunning { get; }
+```mermaid
+classDiagram
+    class PythonProcessManager {
+        +event EventHandler~string~ OutputReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsRunning
+        +Task StartAsync(string pythonPath, string scriptPath, string[] args)
+        +Task~string~ SendCommandAsync(string command, CancellationToken token)
+        +IAsyncEnumerable~string~ SendCommandStreamingAsync(string command, CancellationToken token)
+        +Task StopAsync()
+        +void Dispose()
+    }
     
-    public Task StartAsync(string pythonPath, string scriptPath, string[] args);
-    public Task<string> SendCommandAsync(string command, CancellationToken token = default);
-    public IAsyncEnumerable<string> SendCommandStreamingAsync(string command, CancellationToken token = default);
-    public Task StopAsync();
-    public void Dispose();
-}
-
-public class PythonModelService : IModelService, IDisposable
-{
-    public event EventHandler<string> MessageReceived;
-    public event EventHandler<string> ErrorReceived;
-    public bool IsInitialized { get; }
-    public IAdapterInfo? CurrentAdapter { get; }
+    class PythonModelService {
+        +event EventHandler~string~ MessageReceived
+        +event EventHandler~string~ ErrorReceived
+        +bool IsInitialized
+        +IAdapterInfo? CurrentAdapter
+        +Task InitializeAsync(IAdapterInfo adapter, string? configPath, bool skipValidation)
+        +Task~string~ GenerateResponseAsync(string prompt, CancellationToken token)
+        +IAsyncEnumerable~string~ GenerateStreamingResponseAsync(string prompt, CancellationToken token)
+        +Task ExecuteSpecialCommandAsync(string command)
+        +Task ShutdownAsync()
+        +void Dispose()
+    }
     
-    public Task InitializeAsync(IAdapterInfo adapter, string? configPath = null, bool skipValidation = false);
-    public Task<string> GenerateResponseAsync(string prompt, CancellationToken token = default);
-    public IAsyncEnumerable<string> GenerateStreamingResponseAsync(string prompt, CancellationToken token = default);
-    public Task ExecuteSpecialCommandAsync(string command);
-    public Task ShutdownAsync();
-    public void Dispose();
-}
-
-public class AdapterManager : IAdapterManager
-{
-    public event EventHandler<AdapterEventArgs> NewAdapterAnnounced;
+    class AdapterManager {
+        +event EventHandler~AdapterEventArgs~ NewAdapterAnnounced
+        +Task~IAdapterInfo~ LoadAdapterAsync(string adapterPath)
+        +Task~IAdapterInfo~ GetLatestAdapterAsync(IAdapterPublisher publisher)
+        +Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter)
+        +Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token)
+    }
     
-    public Task<IAdapterInfo> LoadAdapterAsync(string adapterPath);
-    public Task<IAdapterInfo> GetLatestAdapterAsync(IAdapterPublisher publisher);
-    public Task InitializeModelWithAdapterAsync(IModelService modelService, IAdapterInfo adapter);
-    public Task MonitorForNewAdaptersAsync(IAdapterPublisher publisher, CancellationToken token = default);
-}
-
-public class ConsoleChatUI : IChatUI
-{
-    public void DisplayMessage(string role, string message);
-    public Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable<string> messageTokens);
-    public void AnnounceNewAdapter(IAdapterInfo adapter);
-    public Task<string> GetUserInputAsync();
-    public void DisplayError(string message);
-    public void DisplaySystemMessage(string message);
-}
-
-public class ChatSession : IDisposable
-{
-    public Task StartAsync(IAdapterPublisher publisher);
-    public void Stop();
-    public void Dispose();
+    class ConsoleChatUI {
+        +void DisplayMessage(string role, string message)
+        +Task DisplayStreamingMessageAsync(string role, IAsyncEnumerable~string~ messageTokens)
+        +void AnnounceNewAdapter(IAdapterInfo adapter)
+        +Task~string~ GetUserInputAsync()
+        +void DisplayError(string message)
+        +void DisplaySystemMessage(string message)
+    }
     
-    // Private methods for handling messages and commands
-    private Task HandleUserMessageAsync(string message);
-    private Task HandleSpecialCommandAsync(string command);
-}
+    class ChatSession {
+        +Task StartAsync(IAdapterPublisher publisher)
+        +void Stop()
+        +void Dispose()
+        -Task HandleUserMessageAsync(string message)
+        -Task HandleSpecialCommandAsync(string command)
+    }
 ```
 
 ## Getting Started
@@ -312,75 +289,156 @@ public class ChatSession : IDisposable
 ### Project Architecture
 
 ```mermaid
-graph TD
-    A[LLMAdapterClient Solution] --> B[ChatClient]
-    A --> C[Publisher]
-    A --> D[Common]
+flowchart TD
+    %% Main Solution Components
+    subgraph Solution["LLMAdapterClient Solution"]
+        style Solution fill:transparent,stroke:#333,stroke-width:2px
+        
+        subgraph Common["Common Library"]
+            style Common fill:transparent,stroke:#0097a7,stroke-width:2px
+            Interfaces["Core Interfaces"]
+            style Interfaces fill:transparent,stroke:#00bcd4
+        end
+        
+        subgraph Publisher["Publisher Application"]
+            style Publisher fill:transparent,stroke:#2e7d32,stroke-width:2px
+            AdapterSelector("AdapterSelector")
+            AdapterValidator("AdapterValidator")
+            AdapterInfoExtractor("AdapterInfoExtractor")
+            
+            style AdapterSelector fill:transparent,stroke:#4caf50
+            style AdapterValidator fill:transparent,stroke:#4caf50
+            style AdapterInfoExtractor fill:transparent,stroke:#4caf50
+        end
+        
+        subgraph ChatClient["Chat Client Application"]
+            style ChatClient fill:transparent,stroke:#ff8f00,stroke-width:2px
+            PPM["PythonProcessManager"]
+            ModelService["ModelService"]
+            AdapterManager["AdapterManager"]
+            ChatUI["ConsoleChatUI"]
+            ChatSession["ChatSession"]
+            
+            style PPM fill:transparent,stroke:#ffc107
+            style ModelService fill:transparent,stroke:#ffc107
+            style AdapterManager fill:transparent,stroke:#ffc107
+            style ChatUI fill:transparent,stroke:#ffc107
+            style ChatSession fill:transparent,stroke:#ffc107
+        end
+    end
     
-    C --> E[AdapterSelector]
-    C --> F[AdapterValidator]
-    C --> G[AdapterInfoExtractor]
+    %% External System
+    subgraph PythonSystem["Python Training System"]
+        style PythonSystem fill:transparent,stroke:#7b1fa2,stroke-width:2px
+        TrainingScript["main.py"]
+        Adapters["Generated Adapters"]
+        
+        style TrainingScript fill:transparent,stroke:#9c27b0
+        style Adapters fill:transparent,stroke:#9c27b0
+        
+        TrainingScript -->|produces| Adapters
+    end
     
-    B --> H[PythonProcessManager]
-    B --> I[ModelService]
-    B --> J[AdapterManager]
-    B --> K[ConsoleChatUI]
-    B --> L[ChatSession]
+    %% Relationships within Publisher
+    AdapterSelector -->|finds| AdapterValidator
+    AdapterValidator -->|validates| AdapterInfoExtractor
     
-    B --> D
-    C --> D
-    E & F & G --> D
-    H & I & J & K & L --> D
-
-    P[Python Training System] -.-> C
-    P -.-> H
-    P -.-> I
-    C -.-> B
+    %% Relationships within ChatClient
+    ChatSession -->|uses| ModelService
+    ChatSession -->|uses| ChatUI
+    ChatSession -->|uses| AdapterManager
+    ModelService -->|manages| PPM
+    
+    %% Cross-component relationships
+    Publisher -->|implements| Interfaces
+    ChatClient -->|implements| Interfaces
+    AdapterSelector & AdapterValidator & AdapterInfoExtractor -->|use| Interfaces
+    PPM & ModelService & AdapterManager & ChatUI & ChatSession -->|use| Interfaces
+    
+    %% External relationships
+    Adapters -.->|discovered by| AdapterSelector
+    Adapters -.->|loaded by| AdapterManager
+    TrainingScript -.->|interacts with| PPM
+    Publisher -.->|publishes to| ChatClient
 ```
 
 ### Data Flow
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Training as Python Training
-    participant Publisher
-    participant Services as Publisher Services
-    participant ChatClient
-    participant ChatSession
-    participant ChatUI
-    participant AdapterManager
-    participant ModelService
-    participant PythonMgr as Python Process Manager
+    %% Participants with emoji and color indicators
+    participant User as "👤 User"
+    participant Training as "🐍 Python Training"
+    participant Publisher as "📤 Publisher"
+    participant Services as "🛠️ Publisher Services"
+    participant ChatClient as "💬 ChatClient"
+    participant ChatSession as "🔄 ChatSession"
+    participant ChatUI as "🖥️ ConsoleChatUI"
+    participant AdapterManager as "📂 AdapterManager"
+    participant ModelService as "🧠 ModelService"
+    participant PythonMgr as "⚙️ Python Process Manager"
     
-    User->>Training: Train Model
-    Training->>Publisher: Create Adapter File
-    Publisher->>Services: Discover & Validate
+    %% Section headers with color notes
+    Note over Training: Python Training System
+    
+    %% Adapter Training Flow
+    autonumber 1
+    User->>+Training: Train Model
+    Training-->>-Publisher: Create Adapter File
+    
+    Note over Publisher: Publisher Application
+    
+    %% Publisher Processing Flow
+    autonumber 3
+    Publisher->>+Services: Discover & Validate Adapters
     Services->>Services: Extract Metadata
-    Publisher->>Publisher: Monitor & Sync
+    Services-->>-Publisher: Return Adapter Information
+    Publisher->>Publisher: Monitor & Sync Adapters
     
-    User->>ChatClient: Start Chat
-    ChatClient->>Publisher: Check for Updates
-    Publisher-->>ChatClient: Sync New Adapters
-    ChatClient->>ChatSession: Initialize Session
-    ChatSession->>AdapterManager: Get Latest Adapter
-    AdapterManager->>ModelService: Initialize Model
-    ModelService->>PythonMgr: Initialize Python Process
-    PythonMgr->>Training: Interact with Python Script
+    Note over ChatClient: Chat Client Application
     
-    User->>ChatUI: Enter Message
-    ChatUI->>ChatSession: Process Message
-    ChatSession->>ModelService: Generate Response
-    ModelService->>PythonMgr: Send Prompt
-    PythonMgr-->>ModelService: Stream Response Tokens
-    ModelService-->>ChatSession: Forward Response Tokens
-    ChatSession-->>ChatUI: Display Streaming Response
-    ChatUI-->>User: Show Response
+    %% Chat Initialization Flow
+    autonumber 7
+    User->>+ChatClient: Start Chat Application
+    ChatClient->>+Publisher: Request Latest Adapters
+    Publisher-->>-ChatClient: Sync Available Adapters
+    ChatClient->>+ChatSession: Initialize Chat Session
+    ChatSession->>+AdapterManager: Get Latest Adapter
+    AdapterManager-->>-ChatSession: Return Best Adapter
+    ChatSession->>+ModelService: Initialize Model with Adapter
+    ModelService->>+PythonMgr: Start Python Process
+    PythonMgr->>Training: Load Model & Adapter
+    PythonMgr-->>-ModelService: Report Initialization Complete
+    ModelService-->>-ChatSession: Report Model Ready
+    ChatSession-->>-ChatClient: Session Initialization Complete
+    ChatClient-->>-User: Display Welcome Message
     
-    Publisher-->>AdapterManager: Announce New Adapter
-    AdapterManager-->>ChatSession: Notify New Adapter
-    ChatSession-->>ChatUI: Announce New Adapter
-    ChatUI-->>User: Display Adapter Notification
+    %% Chat Interaction Flow
+    autonumber 20
+    User->>+ChatUI: Enter Message or Command
+    ChatUI->>+ChatSession: Forward User Input
+    ChatSession->>+ModelService: Generate Response
+    ModelService->>+PythonMgr: Send Prompt to Python
+    PythonMgr-->>PythonMgr: Process Input & Generate Tokens
+    PythonMgr-->>-ModelService: Stream Response Tokens
+    ModelService-->>-ChatSession: Forward Processed Tokens
+    ChatSession-->>-ChatUI: Display Streaming Response
+    ChatUI-->>-User: Show Formatted Response
+    
+    %% New Adapter Notification Flow
+    autonumber 29
+    Publisher-->>+AdapterManager: Announce New Adapter Available
+    AdapterManager-->>+ChatSession: Notify New Adapter Detected
+    ChatSession-->>+ChatUI: Announce Adapter Update
+    ChatUI-->>-User: Display Update Notification
+    ChatSession->>+ModelService: Update Model with New Adapter
+    ModelService-->>-ChatSession: Confirm Adapter Updated
+    
+    %% Legend
+    Note over User, PythonMgr: Sequence Legend:
+    Note over User, PythonMgr: → Solid arrows: Direct method calls/actions
+    Note over User, PythonMgr: → Dashed arrows: Responses/events/callbacks
+    Note over User, PythonMgr: | Activation bars: Component active duration
 ```
 
 ### Testing
@@ -549,38 +607,396 @@ The test suite includes:
 
 ## Implementation Status
 
-- ✅ Phase 1: Project Structure and Common Components
-  - Created solution structure with three projects
-  - Implemented core interfaces (IAdapterInfo, IAdapterPublisher)
-  - Added comprehensive tests for interfaces
-- ✅ Phase 2: Publisher Implementation
-  - ✅ Implemented adapter selection service
-  - ✅ Implemented adapter validation service
-  - ✅ Implemented metadata extraction service
-  - ✅ Implemented adapter upload system
-  - ✅ Implemented publisher service with event handling
-- ✅ Phase 3: Chat Client Implementation
-  - ✅ Implemented Python process management
-  - ✅ Created tests for Python process interaction
-  - ✅ Implemented model service with adapter support
-  - ✅ Implemented adapter manager for loading and monitoring adapters
-  - ✅ Implemented chat UI with colored output and token streaming
-  - ✅ Implemented chat session with command handling and conversation flow
-- 🔄 Phase 4: Integration and System Tests
-  - ⏳ Implementing integration tests for system components
-  - ⏳ Creating system configuration management
-  - ⏳ Developing end-to-end tests for complete workflow validation
+```mermaid
+flowchart LR
+    %% Phase nodes with status
+    P1[Phase 1: Project Structure]
+    P2[Phase 2: Publisher]
+    P3[Phase 3: Chat Client]
+    P4[Phase 4: Integration]
+    P5[Phase 5: IPFS Integration]
+    P6[Final Release]
+    
+    %% Phase connections
+    P1 --> P2 --> P3 --> P4 --> P5 --> P6
+    
+    %% Key phase details as subgraphs
+    subgraph P1D["Phase 1 Details"]
+        P1_1[Solution Structure]
+        P1_2[Core Interfaces]
+        P1_3[Interface Tests]
+    end
+    
+    subgraph P2D["Phase 2 Details"]
+        P2_1[Adapter Selection]
+        P2_2[Validation & Metadata]
+        P2_3[Upload & Publisher Service]
+    end
+    
+    subgraph P3D["Phase 3 Details"]
+        P3_1[Python Process & Model]
+        P3_2[Adapter Manager]
+        P3_3[Chat UI & Session]
+    end
+    
+    subgraph P4D["Phase 4 Details"]
+        P4_1[Integration Tests]
+        P4_2[System Configuration]
+        P4_3[End-to-End Tests]
+    end
+    
+    subgraph P5D["Phase 5 Details"]
+        P5_1[IPFS Content Addressing]
+        P5_2[Transport-Agnostic Layer]
+        P5_3[DHT & PubSub Integration]
+        P5_4[Offline Support]
+    end
+    
+    %% Connect phases to their details
+    P1 --- P1D
+    P2 --- P2D
+    P3 --- P3D
+    P4 --- P4D
+    P5 --- P5D
+    
+    %% Style definitions using traditional class assignments
+    classDef completed fill:transparent,stroke:#228B22,color:#228B22,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef inProgress fill:transparent,stroke:#FF8C00,color:#FF8C00,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef planned fill:transparent,stroke:#A9A9A9,color:#A9A9A9,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef detailBox fill:transparent,stroke:#5c6bc0,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:14px
+    
+    classDef done fill:transparent,stroke:#228B22,color:#228B22,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef inProg fill:transparent,stroke:#FF8C00,color:#FF8C00,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef plan fill:transparent,stroke:#A9A9A9,color:#A9A9A9,fontFamily:Arial,sans-serif,fontSize:12px
+    
+    %% Apply classes using traditional syntax
+    class P1,P2,P3 completed
+    class P4 inProgress
+    class P5,P6 planned
+    class P1D,P2D,P3D,P4D,P5D detailBox
+    class P1_1,P1_2,P1_3,P2_1,P2_2,P2_3,P3_1,P3_2,P3_3 done
+    class P4_1 inProg
+    class P4_2,P4_3,P5_1,P5_2,P5_3,P5_4 plan
+```
+
+**Legend:** ✅ Done &nbsp;|&nbsp; 🔶 In Progress &nbsp;|&nbsp; ⬜ Planned
+
+## Phase 5: IPFS Integration
+
+Phase 5 focuses on implementing the InterPlanetary File System (IPFS) for decentralized adapter distribution. IPFS will enable resilient, content-addressed storage and retrieval of adapters across distributed networks.
+
+### Core IPFS Principles
+
+Our implementation adheres to IPFS core principles:
+
+1. **Content Addressing**: Adapters are addressed by their content (CID) rather than location
+2. **Transport Agnosticism**: Storage and retrieval work over any transport protocol
+3. **Verification**: All content is cryptographically verified against its CID
+4. **Offline Support**: Adapters remain available even without internet connectivity
+
+### IPFS Architecture
+
+```mermaid
+flowchart TD
+    %% Main components
+    Publisher[Publisher Service]
+    Client[Chat Client]
+    IPFS[IPFS Layer]
+    
+    %% IPFS components
+    subgraph IPFSComponents["IPFS Integration Layer"]
+        ContentAddressing["Content Addressing System"]
+        TransportLayer["Transport-Agnostic Layer"]
+        Registry["Adapter Registry"]
+        PubSub["PubSub Notification"]
+        DHT["DHT & Peer Discovery"]
+        Security["Security & Encryption"]
+        Offline["Offline Support"]
+        
+        style ContentAddressing fill:transparent,stroke:#d32f2f
+        style TransportLayer fill:transparent,stroke:#d32f2f
+        style Registry fill:transparent,stroke:#d32f2f
+        style PubSub fill:transparent,stroke:#d32f2f
+        style DHT fill:transparent,stroke:#d32f2f
+        style Security fill:transparent,stroke:#d32f2f
+        style Offline fill:transparent,stroke:#d32f2f
+    end
+    
+    %% Interactions
+    Publisher --- IPFS
+    Client --- IPFS
+    IPFS --- IPFSComponents
+    
+    style Publisher fill:transparent,stroke:#2e7d32
+    style Client fill:transparent,stroke:#ff8f00
+    style IPFS fill:transparent,stroke:#0097a7
+    style IPFSComponents fill:transparent,stroke:#5c6bc0,stroke-width:2px
+```
+
+### Implementation Tasks
+
+#### 1. IPFS Content Addressing System
+
+- **Implement CID Generation**: Support both CIDv0 and CIDv1 with appropriate multihash
+- **Create Verification Pipeline**: Verify all adapter content against CIDs
+- **Support Incremental Verification**: Handle large adapters efficiently
+- **Implement Content Integrity Checking**: Guarantee adapter data hasn't been modified
+
+```csharp
+// Sample CID generation and verification
+public class ContentAddressingSystem : IContentAddressingSystem
+{
+    public async Task<string> GenerateCidAsync(string filePath, CancellationToken token = default)
+    {
+        // Calculate multihash from file content
+        // Format as CIDv1 with appropriate codec information
+        // Return formatted CID
+    }
+    
+    public async Task<bool> VerifyContentAsync(string filePath, string cid, CancellationToken token = default)
+    {
+        // Generate CID from current content
+        // Compare with the provided CID
+        // Return verification result
+    }
+}
+```
+
+#### 2. Transport-Agnostic Layer
+
+- **Create Abstracted API Interface**: Support multiple IPFS implementations
+- **Implement HTTP API Client**: For interaction with Kubo nodes
+- **Add Direct libp2p Support**: For peer-to-peer communication
+- **Support Multiple Transports**: HTTP, WebSockets, TCP/IP
+
+```csharp
+// Transport-agnostic interface
+public interface IIpfsTransport
+{
+    Task<byte[]> GetAsync(string cid, CancellationToken token = default);
+    Task<string> AddAsync(byte[] data, CancellationToken token = default);
+    Task<bool> PinAsync(string cid, CancellationToken token = default);
+    // Additional transport operations
+}
+
+// Implementation for HTTP API
+public class IpfsHttpTransport : IIpfsTransport
+{
+    private readonly HttpClient _client;
+    private readonly string _apiEndpoint;
+    
+    // Implementation of transport-agnostic operations via HTTP
+}
+
+// Implementation for direct libp2p
+public class IpfsLibp2pTransport : IIpfsTransport
+{
+    // Implementation via direct libp2p protocol
+}
+```
+
+#### 3. DHT & PubSub Integration
+
+- **Implement DHT-Based Peer Discovery**: Find peers with desired adapters
+- **Create PubSub Announcement System**: Real-time adapter notifications
+- **Build Bootstrapping Mechanism**: Connect to network efficiently
+- **Implement Routing Table Management**: Optimize peer connections
+
+```csharp
+// DHT-based peer discovery
+public class DhtPeerDiscovery : IPeerDiscovery
+{
+    public async Task<IEnumerable<PeerInfo>> FindProvidersAsync(string cid, int limit = 20)
+    {
+        // Use DHT to find providers of the specified CID
+        // Return list of peers that can provide the content
+    }
+}
+
+// PubSub for adapter announcements
+public class AdapterAnnouncementSystem : IAdapterAnnouncementSystem
+{
+    public event EventHandler<AdapterAnnouncedEventArgs> AdapterAnnounced;
+    
+    public async Task AnnounceAdapterAsync(IAdapterInfo adapter)
+    {
+        // Publish adapter information to PubSub topic
+    }
+    
+    public async Task SubscribeToAnnouncementsAsync()
+    {
+        // Subscribe to adapter announcement topic
+        // Raise events when new adapters are announced
+    }
+}
+```
+
+#### 4. Adapter Registry
+
+- **Build Distributed Adapter Catalog**: Track available adapters
+- **Implement Metadata Indexing**: Enable adapter search and filtering
+- **Create Version Management**: Track adapter revisions
+- **Support Adapter Discovery**: Find adapters by capabilities
+
+```csharp
+// Adapter registry
+public class IpfsAdapterRegistry : IAdapterRegistry
+{
+    public async Task<bool> RegisterAdapterAsync(IAdapterInfo adapter)
+    {
+        // Store adapter metadata in the registry
+        // Index by model, capabilities, etc.
+        // Return success status
+    }
+    
+    public async Task<IEnumerable<IAdapterInfo>> QueryAdaptersAsync(
+        string modelId = null, 
+        Dictionary<string, object> capabilities = null)
+    {
+        // Search registry for adapters matching criteria
+        // Return matching adapter information
+    }
+}
+```
+
+#### 5. Offline Support System
+
+- **Implement Local Adapter Cache**: Keep adapters available offline
+- **Create Sync Mechanism**: Update when connectivity returns
+- **Build Prefetching Logic**: Download related adapters proactively
+- **Implement Cache Management**: Handle limited storage scenarios
+
+```csharp
+// Offline support system
+public class OfflineSupport : IOfflineSupport
+{
+    public async Task<IAdapterInfo> GetOfflineAdapterAsync(string adapterIdentifier)
+    {
+        // Check local cache for adapter
+        // Return adapter if available
+        // Otherwise return null or throw
+    }
+    
+    public async Task CacheAdapterAsync(IAdapterInfo adapter)
+    {
+        // Store adapter in local cache
+        // Index for offline retrieval
+    }
+    
+    public async Task SyncCacheAsync(CancellationToken token = default)
+    {
+        // Sync local cache with network when online
+        // Update metadata and download new versions
+    }
+}
+```
+
+#### 6. Security Features
+
+- **Implement Access Control**: Manage adapter publishing permissions
+- **Add Content Encryption**: Protect sensitive adapter data
+- **Create Signature Verification**: Validate adapter authenticity
+- **Support Private Networks**: Enable organizational adapter sharing
+
+```csharp
+// Security system
+public class IpfsSecurity : IIpfsSecurity
+{
+    public async Task<string> EncryptAdapterAsync(string adapterPath, byte[] encryptionKey)
+    {
+        // Encrypt adapter files
+        // Return path to encrypted content
+    }
+    
+    public async Task<string> DecryptAdapterAsync(string encryptedPath, byte[] encryptionKey)
+    {
+        // Decrypt adapter files
+        // Return path to decrypted content
+    }
+    
+    public async Task<bool> VerifySignatureAsync(string adapterPath, byte[] publicKey)
+    {
+        // Verify adapter signature
+        // Return verification result
+    }
+}
+```
+
+#### 7. IPFS Integration Testing
+
+- **Create Mock IPFS Node**: For testing without network
+- **Implement Test Fixtures**: Standard test scenarios
+- **Build Performance Benchmarks**: Measure operation times
+- **Create Fault Injection**: Test resilience to network issues
+
+```csharp
+// IPFS integration tests
+public class IpfsIntegrationTests
+{
+    [Fact]
+    public async Task ShouldRetrieveAdapterByContentId()
+    {
+        // Arrange: Set up test adapter and CID
+        // Act: Retrieve adapter using CID
+        // Assert: Verify adapter was retrieved correctly
+    }
+    
+    [Fact]
+    public async Task ShouldWorkInOfflineMode()
+    {
+        // Arrange: Set up cached adapter
+        // Act: Disconnect network and retrieve adapter
+        // Assert: Verify adapter is available offline
+    }
+    
+    // Additional integration tests
+}
+```
+
+### Migration Strategy
+
+The transition from local storage to IPFS will follow this phased approach:
+
+1. **Parallel Implementation**: Build IPFS alongside existing storage
+2. **Dual Publishing Mode**: Store adapters both locally and on IPFS
+3. **Client-Side Support**: Add IPFS support to ChatClient
+4. **Gradual Transition**: Shift from local to IPFS storage
+5. **Backward Compatibility**: Maintain support for legacy storage
+
+### IPFS Implementation Benefits
+
+- **Resilience**: No single point of failure
+- **Decentralization**: Adapters available from multiple sources
+- **Global Distribution**: Worldwide adapter availability
+- **Version Control**: Natural handling of adapter versions
+- **Offline Access**: Adapters available without internet
+- **Peer-to-Peer Sharing**: Direct adapter sharing between clients
 
 ## Python Adapter Structure
 
 The Python training system generates adapter files with the following structure:
 
-```
-best_model_adapter/
-├── README.md                # Usage instructions
-├── adapter_config.json      # Configuration parameters
-├── adapter_model.safetensors # Model weights
-└── metadata.pt              # Training metadata
+```mermaid
+graph TD
+    A[best_model_adapter/] --> B[README.md]
+    A --> C[adapter_config.json]
+    A --> D[adapter_model.safetensors]
+    A --> E[metadata.pt]
+    
+    B[README.md] -.-> |"Contains"| B1[Usage instructions]
+    C[adapter_config.json] -.-> |"Contains"| C1[Configuration parameters]
+    D[adapter_model.safetensors] -.-> |"Contains"| D1[Model weights]
+    E[metadata.pt] -.-> |"Contains"| E1[Training metadata]
+    
+    style A fill:transparent,stroke:#7b1fa2
+    style B fill:transparent,stroke:#9c27b0
+    style C fill:transparent,stroke:#9c27b0
+    style D fill:transparent,stroke:#9c27b0
+    style E fill:transparent,stroke:#9c27b0
+    style B1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
+    style C1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
+    style D1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
+    style E1 fill:transparent,stroke:#9c27b0,stroke-dasharray: 5 5
 ```
 
 ## Documentation

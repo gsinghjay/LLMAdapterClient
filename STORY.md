@@ -5,7 +5,8 @@ Hey there! 👋 If you're new to .NET and wondering how this program works, you'
 First, let's look at how our C# application is organized:
 
 ```mermaid
-graph TD
+flowchart TD
+    %% Main solution components
     A[LLMAdapterClient Solution] --> B[ChatClient]
     A --> C[Publisher]
     A --> D[Common]
@@ -15,6 +16,7 @@ graph TD
     
     B --> PM[Python Process Manager]
 
+    %% Python training system
     P[Python Training System] -->|Phase 1| G[Data Generation]
     P -->|Phase 2| H[Model Training]
     H -.-> E[Adapter Files]
@@ -22,14 +24,17 @@ graph TD
     F -.-> B
     PM -.-> P
 
-    style A fill:#f9f,stroke:#333,stroke-width:4px
-    style B fill:#bbf,stroke:#333,stroke-width:2px
-    style C fill:#90EE90,stroke:#333,stroke-width:2px
-    style D fill:#90EE90,stroke:#333,stroke-width:2px
-    style P fill:#yellow,stroke:#333,stroke-width:2px
-    style G fill:#lightgreen,stroke:#333,stroke-width:2px
-    style H fill:#lightgreen,stroke:#333,stroke-width:2px
-    style PM fill:#90EE90,stroke:#333,stroke-width:2px
+    %% Apply styling according to standards
+    style A fill:transparent,stroke:#333,stroke-width:4px,fontFamily:Arial,sans-serif,fontSize:16px
+    style B fill:transparent,stroke:#ff8f00,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    style C fill:transparent,stroke:#2e7d32,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    style D fill:transparent,stroke:#0097a7,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    style P fill:transparent,stroke:#7b1fa2,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    style G fill:transparent,stroke:#9c27b0,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    style H fill:transparent,stroke:#9c27b0,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    style PM fill:transparent,stroke:#ff8f00,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    style E fill:transparent,stroke:#9c27b0,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    style F fill:transparent,stroke:#2e7d32,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
 ```
 
 - Think of this like a LEGO set where:
@@ -48,28 +53,35 @@ When you run the program, here's what happens:
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Training as Python Training
-    participant Publisher
-    participant Storage as Shared Storage
-    participant ChatClient
-    participant PythonMgr as Python Process Manager
+    %% Participants with emoji and color indicators
+    participant User as "👤 User"
+    participant Training as "🐍 Python Training"
+    participant Publisher as "📤 Publisher"
+    participant Storage as "💾 Shared Storage"
+    participant ChatClient as "💬 ChatClient"
+    participant PythonMgr as "⚙️ Python Process Manager"
     
-    User->>Training: Run Training Manually
-    Training-->>User: Create Adapter File
-    User->>Publisher: Run Publisher Manually
+    %% Section headers with notes
+    Note over Training: Python Training System
+    
+    %% Adapter Training Flow
+    autonumber 1
+    User->>+Training: Run Training Manually
+    Training-->>-User: Create Adapter File
+    User->>+Publisher: Run Publisher Manually
     Publisher->>Storage: Upload Adapter
     Note over Publisher: ✅ Implemented
     
-    User->>ChatClient: Start Chat
-    ChatClient->>Storage: Check for Adapters
-    Storage-->>ChatClient: Retrieve Latest Adapter
-    ChatClient->>PythonMgr: Initialize Python Process
+    %% Chat Flow
+    User->>+ChatClient: Start Chat Application
+    ChatClient->>+Storage: Check for Adapters
+    Storage-->>-ChatClient: Retrieve Latest Adapter
+    ChatClient->>+PythonMgr: Initialize Python Process
     Note over PythonMgr: ✅ Implemented
     PythonMgr->>Training: Interact with Python Script
-    PythonMgr-->>ChatClient: Stream Model Responses
+    PythonMgr-->>-ChatClient: Stream Model Responses
     Note over ChatClient: ✅ Implemented
-    ChatClient-->>User: Show Enhanced Responses
+    ChatClient-->>-User: Show Enhanced Responses
 ```
 
 - This sequence diagram shows the current workflow:
@@ -100,7 +112,8 @@ sequenceDiagram
 Here's where our project stands:
 
 ```mermaid
-graph LR
+flowchart LR
+    %% Project status overview
     subgraph "Completed ✅"
         A[Python Training System]
         B[Basic Project Structure]
@@ -118,21 +131,16 @@ graph LR
         K[Integration and System Tests]
     end
     
-    style A fill:#90EE90
-    style B fill:#90EE90
-    style C fill:#90EE90
-    style D fill:#90EE90
-    style E fill:#90EE90
-    style F fill:#90EE90
-    style G fill:#90EE90
-    style H fill:#90EE90
-    style I fill:#90EE90
-    style J fill:#90EE90
-    style K fill:#FFB6C1
+    %% Apply styling according to standards
+    classDef completed fill:transparent,stroke:#228B22,color:#228B22,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef inProgress fill:transparent,stroke:#FF8C00,color:#FF8C00,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    
+    class A,B,C,D,E,F,G,H,I,J completed
+    class K inProgress
 ```
 
 - This status diagram uses colors to show progress:
-    - **Green boxes** (✅) show completed features:
+    - **Green borders** (✅) show completed features:
         - Python training system (main.py)
         - Basic C# project structure
         - Core interface definitions
@@ -143,14 +151,15 @@ graph LR
         - Adapter Manager with monitoring and event handling
         - Chat UI with colored output and streaming display
         - Chat Session with command handling and conversation management
-    - **Pink boxes** (🔄) show features under development:
+    - **Orange borders** (🔄) show features under development:
         - Integration and system tests
 
 ## Project Structure Explained
 Here's how the files are organized:
 
 ```mermaid
-graph TD
+flowchart TD
+    %% Main projects and structure
     subgraph "Main Projects"
         A[LLMAdapterClient]
         A --> B[ChatClient/]
@@ -172,6 +181,7 @@ graph TD
         CCServices --> CS[ChatSession ✅]
     end
     
+    %% Python system structure
     subgraph "Python System"
         F[llm_training-main/]
         F --> G[main.py]
@@ -191,16 +201,20 @@ graph TD
         end
     end
     
-    style AS fill:#90EE90
-    style AV fill:#90EE90
-    style AE fill:#90EE90
-    style AU fill:#90EE90
-    style AP fill:#90EE90
-    style PM fill:#90EE90
-    style MS fill:#90EE90
-    style AM fill:#90EE90
-    style CUI fill:#90EE90
-    style CS fill:#90EE90
+    %% Apply styling according to standards
+    classDef solution fill:transparent,stroke:#333,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef common fill:transparent,stroke:#0097a7,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef publisher fill:transparent,stroke:#2e7d32,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef chatClient fill:transparent,stroke:#ff8f00,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef python fill:transparent,stroke:#7b1fa2,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef done fill:transparent,stroke:#228B22,color:#228B22,fontFamily:Arial,sans-serif,fontSize:12px
+    
+    class A solution
+    class B,CCServices,PM,MS,AM,CUI,CS chatClient
+    class C,S1,AS,AV,AE,AU,AP publisher
+    class D common
+    class F,G,T,D1,D2,H,I,J,K,AC,AM2,MP,RD python
+    class AS,AV,AE,AU,AP,PM,MS,AM,CUI,CS done
 ```
 
 ### Detailed Project Breakdown
@@ -209,7 +223,8 @@ graph TD
 Let's break down each project and its purpose:
 
 ```mermaid
-graph TD
+flowchart TD
+    %% ChatClient project structure
     subgraph "ChatClient ✅"
         CC[ChatClient Project]
         CC --> CC1[Program.cs<br>Entry Point]
@@ -223,6 +238,7 @@ graph TD
         CC1 --> CC9[References<br>Common]
     end
 
+    %% Publisher project structure
     subgraph "Publisher ✅"
         PB[Publisher Project]
         PB --> PB1[Program.cs<br>Entry Point]
@@ -234,6 +250,7 @@ graph TD
         PB2 --> PB7[AdapterPublisherService]
     end
 
+    %% Common project structure
     subgraph "Common ✅"
         CM[Common Project]
         CM --> CM1[Interfaces/<br>Core Interfaces]
@@ -245,14 +262,22 @@ graph TD
         CM --> CM2[Models/<br>AdapterInfo]
     end
 
-    style CC fill:#90EE90
-    style CC4 fill:#90EE90
-    style CC5 fill:#90EE90
-    style CC6 fill:#90EE90
-    style CC7 fill:#90EE90
-    style CC8 fill:#90EE90
-    style PB fill:#90EE90
-    style CM fill:#90EE90
+    %% Apply styling according to standards
+    classDef chatClient fill:transparent,stroke:#ff8f00,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef chatClientComp fill:transparent,stroke:#ff8f00,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef publisher fill:transparent,stroke:#2e7d32,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef publisherComp fill:transparent,stroke:#2e7d32,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef common fill:transparent,stroke:#0097a7,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef commonComp fill:transparent,stroke:#0097a7,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef done fill:transparent,stroke:#228B22,color:#228B22,fontFamily:Arial,sans-serif,fontSize:12px
+    
+    class CC chatClient
+    class CC1,CC2,CC3,CC9 chatClientComp
+    class CC4,CC5,CC6,CC7,CC8 done
+    class PB publisher
+    class PB1,PB2,PB3,PB4,PB5,PB6,PB7 publisherComp
+    class CM common
+    class CM1,CM2,CM3,CM4,CM5,CM6,CM7 commonComp
 ```
 
 ##### Publisher Project ✅
@@ -311,7 +336,8 @@ graph TD
 The Python Process Manager is like a bridge between our C# code and the Python scripts. Here's what it does:
 
 ```mermaid
-graph TD
+flowchart TD
+    %% Python Process Manager components
     PM[PythonProcessManager] --> PM1[Start Python Process]
     PM --> PM2[Send Commands]
     PM --> PM3[Receive Responses]
@@ -324,13 +350,14 @@ graph TD
     PS --> PM3
     PS --> PM4
     
-    style PM fill:#90EE90
-    style PM1 fill:#90EE90
-    style PM2 fill:#90EE90
-    style PM3 fill:#90EE90
-    style PM4 fill:#90EE90
-    style PM5 fill:#90EE90
-    style PM6 fill:#90EE90
+    %% Apply styling according to standards
+    classDef manager fill:transparent,stroke:#ff8f00,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef component fill:transparent,stroke:#ff8f00,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef python fill:transparent,stroke:#7b1fa2,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    
+    class PM manager
+    class PM1,PM2,PM3,PM4,PM5,PM6 component
+    class PS python
 ```
 
 - **What it does**:
@@ -353,7 +380,8 @@ graph TD
 The Chat UI and Chat Session components provide the user interface and conversation management:
 
 ```mermaid
-graph TD
+flowchart TD
+    %% Chat UI and Chat Session components
     UI[ConsoleChatUI] --> UI1[Display Messages]
     UI --> UI2[Format Roles]
     UI --> UI3[Use Colors]
@@ -375,21 +403,12 @@ graph TD
     UI5 --> CS
     UI6 --> CS
     
-    style UI fill:#90EE90
-    style UI1 fill:#90EE90
-    style UI2 fill:#90EE90
-    style UI3 fill:#90EE90
-    style UI4 fill:#90EE90
-    style UI5 fill:#90EE90
-    style UI6 fill:#90EE90
+    %% Apply styling according to standards
+    classDef component fill:transparent,stroke:#ff8f00,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef feature fill:transparent,stroke:#ff8f00,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
     
-    style CS fill:#90EE90
-    style CS1 fill:#90EE90
-    style CS2 fill:#90EE90
-    style CS3 fill:#90EE90
-    style CS4 fill:#90EE90
-    style CS5 fill:#90EE90
-    style CS6 fill:#90EE90
+    class UI,CS component
+    class UI1,UI2,UI3,UI4,UI5,UI6,CS1,CS2,CS3,CS4,CS5,CS6 feature
 ```
 
 - **What the Chat UI does**:
@@ -420,19 +439,24 @@ graph TD
 Here's what happens when you run the program:
 
 ```mermaid
-graph TD
+flowchart TD
+    %% Program execution flow
     A[Start] --> B[Run Python Training]
     B --> C[Run Publisher to Upload Adapter]
     C --> D[Start ChatClient]
     D --> E[Python Process Starts]
     E --> F[Chat with Enhanced Model]
     
-    style A fill:#f9f
-    style B fill:#90EE90
-    style C fill:#90EE90
-    style D fill:#90EE90
-    style E fill:#90EE90
-    style F fill:#90EE90
+    %% Apply styling according to standards
+    classDef start fill:transparent,stroke:#333,stroke-width:2px,fontFamily:Arial,sans-serif,fontSize:14px
+    classDef python fill:transparent,stroke:#7b1fa2,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef publisher fill:transparent,stroke:#2e7d32,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    classDef chatClient fill:transparent,stroke:#ff8f00,stroke-width:1px,fontFamily:Arial,sans-serif,fontSize:12px
+    
+    class A start
+    class B,E python
+    class C publisher
+    class D,F chatClient
 ```
 
 1. Start by running Python training:
